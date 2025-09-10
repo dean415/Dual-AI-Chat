@@ -59,6 +59,11 @@ export const useNotepadLogic = (initialContent: string) => {
     _addHistoryEntry(initialContent, null);
   }, [initialContent, _addHistoryEntry]);
 
+  // Allow user to directly edit the notepad; edits enter the same history stack
+  const applyUserEdit = useCallback((newContent: string) => {
+    _addHistoryEntry(newContent, MessageSender.User);
+  }, [_addHistoryEntry]);
+
   const undoNotepad = useCallback(() => {
     if (currentHistoryIndex > 0) {
       const newIndex = currentHistoryIndex - 1;
@@ -85,6 +90,7 @@ export const useNotepadLogic = (initialContent: string) => {
     lastNotepadUpdateBy,
     processNotepadUpdateFromAI,
     clearNotepadContent,
+    applyUserEdit,
     // setNotepadContent is no longer exposed directly for external modification without history tracking
     undoNotepad,
     redoNotepad,

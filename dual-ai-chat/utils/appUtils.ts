@@ -269,6 +269,25 @@ export const formatNotepadContentForAI = (content: string): string => {
     .join('\n');
 };
 
+/**
+ * Render a simple mustache-like template by replacing {{var}} with values.
+ * - Unknown variables are replaced with empty string by default.
+ * - Whitespace inside braces is ignored: {{ var_name }} works.
+ */
+export const renderTemplate = (
+  tpl: string,
+  vars: Record<string, string | number | boolean | undefined | null>,
+  options?: { keepUnknown?: boolean }
+): string => {
+  if (!tpl) return '';
+  const keepUnknown = !!options?.keepUnknown;
+  return tpl.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_m, key: string) => {
+    const v = vars?.[key];
+    if (v === undefined || v === null) return keepUnknown ? _m : '';
+    return String(v);
+  });
+};
+
 export const getWelcomeMessageText = (
   cognitoModelNameFromDetails: string, // Actual name of Cognito's model from its details object
   museModelNameFromDetails: string,    // Actual name of Muse's model from its details object

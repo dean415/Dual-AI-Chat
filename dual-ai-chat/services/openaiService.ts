@@ -31,7 +31,13 @@ export const generateOpenAiResponse = async (
   apiKey: string,
   baseUrl: string,
   systemInstruction?: string,
-  imagePart?: { mimeType: string; data: string } // Base64 data and mimeType
+  imagePart?: { mimeType: string; data: string }, // Base64 data and mimeType
+  options?: {
+    temperature?: number; // 0–2
+    top_p?: number;       // 0–1
+    reasoning_effort?: 'low' | 'medium' | 'high';
+    verbosity?: 'low' | 'medium' | 'high';
+  }
 ): Promise<OpenAiResponsePayload> => {
   const startTime = performance.now();
   const messages: OpenAiChatMessage[] = [];
@@ -57,12 +63,20 @@ export const generateOpenAiResponse = async (
   }
   messages.push({ role: 'user', content: userMessageContent });
 
-  const requestBody = {
+  const requestBody: any = {
     model: modelId,
     messages: messages,
     // max_tokens: 1024, // Optional: Set a default or make it configurable
     // temperature: 0.7, // Optional
   };
+
+  // Optional parameter passthrough (only include when defined)
+  if (options) {
+    if (options.temperature !== undefined) requestBody.temperature = options.temperature;
+    if (options.top_p !== undefined) requestBody.top_p = options.top_p;
+    if (options.reasoning_effort !== undefined) requestBody.reasoning_effort = options.reasoning_effort;
+    if (options.verbosity !== undefined) requestBody.verbosity = options.verbosity;
+  }
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {

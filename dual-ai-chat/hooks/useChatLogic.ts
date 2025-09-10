@@ -1,5 +1,6 @@
 
 import { useState, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { ChatMessage, MessageSender, MessagePurpose, FailedStepPayload, DiscussionMode } from '../types'; 
 import { generateResponse as generateGeminiResponse } from '../services/geminiService';
 import { generateOpenAiResponse } from '../services/openaiService'; 
@@ -430,6 +431,11 @@ export const useChatLogic = ({
       try {
         const dataUrl = URL.createObjectURL(imageFile); 
         userImageForDisplay = { dataUrl, name: imageFile.name, type: imageFile.type };
+        // 先同步插入用户消息，避免与后续并发消息乱序
+        flushSync(() => {
+          addMessage(userInput, MessageSender.User, MessagePurpose.UserInput, undefined, userImageForDisplay);
+        });
+        // 再进行耗时的 base64 转换供模型调用
         const base64Data = await fileToBase64(imageFile); 
         geminiImageApiPart = { inlineData: { mimeType: imageFile.type, data: base64Data } };
       } catch (error) {
@@ -440,9 +446,12 @@ export const useChatLogic = ({
         if (userImageForDisplay?.dataUrl.startsWith('blob:')) URL.revokeObjectURL(userImageForDisplay.dataUrl);
         return;
       }
+    } else {
+      // 无图片也要同步插入，确保排序正确
+      flushSync(() => {
+        addMessage(userInput, MessageSender.User, MessagePurpose.UserInput);
+      });
     }
-
-    addMessage(userInput, MessageSender.User, MessagePurpose.UserInput, undefined, userImageForDisplay);
 
     let currentLocalDiscussionLog: string[] = [];
     let lastTurnTextForLog = "";

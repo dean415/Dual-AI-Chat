@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { MessageSender } from '../types';
-import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2 } from 'lucide-react';
+import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2, XCircle } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -15,6 +15,7 @@ interface NotepadProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onEdit?: (newContent: string) => void;
 }
 
 const Notepad: React.FC<NotepadProps> = ({ 
@@ -26,10 +27,12 @@ const Notepad: React.FC<NotepadProps> = ({
   onUndo,
   onRedo,
   canUndo,
-  canRedo
+  canRedo,
+  onEdit,
 }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
+  const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const processedHtml = useMemo(() => {
     if (isPreviewMode) {
@@ -38,6 +41,19 @@ const Notepad: React.FC<NotepadProps> = ({
     }
     return '';
   }, [content, isPreviewMode]);
+
+  // When switching到编辑态，自动聚焦文本框
+  React.useEffect(() => {
+    if (!isPreviewMode && textAreaRef.current) {
+      // 仅在未加载时允许聚焦
+      if (!isLoading) {
+        textAreaRef.current.focus();
+        // 将光标移动到文本末尾
+        const len = textAreaRef.current.value.length;
+        textAreaRef.current.setSelectionRange(len, len);
+      }
+    }
+  }, [isPreviewMode, isLoading]);
 
   const handleCopyNotepad = async () => {
     try {
@@ -87,6 +103,16 @@ const Notepad: React.FC<NotepadProps> = ({
             <Redo2 size={18} />
           </button>
           <div className="h-4 w-px bg-gray-300 mx-1" aria-hidden="true"></div>
+          {!isPreviewMode && (
+            <button
+              onClick={() => setIsPreviewMode(true)}
+              className={baseButtonClass}
+              title="退出编辑（已自动保存）"
+              aria-label="Exit edit mode"
+            >
+              <XCircle size={18} />
+            </button>
+          )}
           <button
             onClick={onToggleFullscreen}
             className={baseButtonClass}
@@ -119,36 +145,22 @@ const Notepad: React.FC<NotepadProps> = ({
             className="markdown-preview"
             dangerouslySetInnerHTML={{ __html: processedHtml }}
             aria-label="Markdown 预览"
+            tabIndex={0}
+            onClick={() => { if (!isLoading) setIsPreviewMode(false); }}
+            onKeyDown={(e) => { if (!isLoading && (e.key === 'Enter' || e.key.length === 1)) { setIsPreviewMode(false); e.preventDefault(); } }}
+            title={isLoading ? 'AI 正在处理，暂不可编辑' : '单击切换到编辑'}
           />
         ) : (
-          <div 
-            className="w-full h-full p-3 bg-white text-gray-800 font-mono text-xl leading-relaxed"
-            aria-label="共享记事本内容 (原始内容)"
-          >
-            {lines.map((line, index) => (
-              <div key={index} className="flex">
-                <span 
-                  className="w-10 text-right pr-3 text-gray-400 select-none flex-shrink-0"
-                  aria-hidden="true"
-                >
-                  {index + 1}
-                </span>
-                <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
-              </div>
-            ))}
-            {/* Add an empty line with number if content is empty to show the textarea-like behavior */}
-            {content === '' && (
-                 <div className="flex">
-                    <span 
-                        className="w-10 text-right pr-3 text-gray-400 select-none flex-shrink-0"
-                        aria-hidden="true"
-                    >
-                        1
-                    </span>
-                    <span className="flex-1 whitespace-pre-wrap break-all"></span>
-                 </div>
-            )}
-          </div>
+          <textarea
+            className="w-full h-full p-3 bg-white text-gray-800 font-mono text-base leading-relaxed outline-none resize-none"
+            aria-label="共享记事本内容 (可编辑)"
+            value={content}
+            onChange={(e) => onEdit && onEdit(e.target.value)}
+            onInput={(e) => onEdit && onEdit((e.target as HTMLTextAreaElement).value)}
+            disabled={isLoading}
+            placeholder="在此编辑共享记事本内容..."
+            ref={textAreaRef}
+          />
         )}
       </div>
     </div>

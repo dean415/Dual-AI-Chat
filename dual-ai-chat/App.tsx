@@ -1,11 +1,13 @@
 
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ChatMessage, MessageSender, MessagePurpose, FailedStepPayload, DiscussionMode } from './types';
+import { flushSync } from 'react-dom';
+import { ChatMessage, MessageSender, MessagePurpose, FailedStepPayload, DiscussionMode, MoaStepId, MoaStepResult } from './types';
 import ChatInput from './components/ChatInput';
 import MessageBubble from './components/MessageBubble';
 import Notepad from './components/Notepad';
 import SettingsModal from './components/SettingsModal';
+import TeamManagementModal from './components/TeamManagementModal';
 import {
   MODELS,
   DEFAULT_COGNITO_MODEL_API_NAME, 
@@ -35,7 +37,11 @@ import { BotMessageSquare, AlertTriangle, RefreshCcw as RefreshCwIcon, Settings2
 import { useChatLogic } from './hooks/useChatLogic';
 import { useNotepadLogic } from './hooks/useNotepadLogic';
 import { useAppUI } from './hooks/useAppUI';
-import { generateUniqueId, getWelcomeMessageText } from './utils/appUtils';
+import { generateUniqueId, getWelcomeMessageText, fileToBase64, parseAIResponse } from './utils/appUtils';
+import { useAppStore } from './store/appStore';
+import { useMoeLogic } from './hooks/useMoeLogic';
+import type { MoeTeamPreset, TeamPreset, ApiProviderConfig } from './types';
+import MoaBubble from './components/MoaBubble';
 
 const DEFAULT_CHAT_PANEL_PERCENT = 60; 
 const FONT_SIZE_STORAGE_KEY = 'dualAiChatFontSizeScale';
@@ -48,8 +54,13 @@ interface ApiKeyStatus {
   message?: string;
 }
 
-const App: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const App: React.FC = () => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [moeRunHistory, setMoeRunHistory] = useState<Array<{ id: string; steps: Record<MoaStepId, MoaStepResult>; startedAt: number; anchorMessageId: string }>>([]);
+  const [currentMoeEvent, setCurrentMoeEvent] = useState<{ runId: string; startedAt: number; anchorMessageId: string } | null>(null);
+  const { state: appState } = useAppStore();
+  const hideLegacyModelSelectors = !!(appState && appState.activeTeamId);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState<boolean>(false);
   
   // Gemini Custom API Config State
   const [useCustomApiConfig, setUseCustomApiConfig] = useState<boolean>(() => {
@@ -115,6 +126,7 @@ const App: React.FC = () => {
     lastNotepadUpdateBy,
     processNotepadUpdateFromAI,
     clearNotepadContent,
+    applyUserEdit,
     undoNotepad,
     redoNotepad,
     canUndo,
@@ -237,6 +249,9 @@ const App: React.FC = () => {
 
   const initializeChat = useCallback(() => {
     setMessages([]);
+    setMoeRunHistory([]);
+    setCurrentMoeEvent(null);
+    setMoeRunHistory([]);
     clearNotepadContent();
     setIsNotepadFullscreen(false); 
     setIsAutoScrollEnabled(true);
@@ -331,7 +346,12 @@ const App: React.FC = () => {
   }, [isLoading, stopChatLogicGeneration, initializeChat]);
 
   const handleStopGeneratingAppLevel = useCallback(() => {
-    stopChatLogicGeneration();
+    // 在 MoE 模式下，使用 MoE 的停止；否则保持原有逻辑
+    if (activeTeam && activeTeam.mode === 'moe') {
+      // will be defined later; placeholder for type
+    } else {
+      stopChatLogicGeneration();
+    }
   }, [stopChatLogicGeneration]);
 
   useEffect(() => {
@@ -350,6 +370,9 @@ const App: React.FC = () => {
   }, [isNotepadFullscreen, toggleNotepadFullscreen, isSettingsModalOpen, closeSettingsModal]);
 
   const Separator = () => <div className="h-6 w-px bg-gray-300 mx-1 md:mx-1.5" aria-hidden="true"></div>;
+
+  const openTeamModal = useCallback(() => setIsTeamModalOpen(true), []);
+  const closeTeamModal = useCallback(() => setIsTeamModalOpen(false), []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (chatContainerRef.current) {
@@ -395,6 +418,112 @@ const App: React.FC = () => {
     return apiKeyStatus.message; 
   }, [apiKeyStatus, useCustomApiConfig, useOpenAiApiConfig]);
 
+  // ===== MoE 接入：计算 activeTeam 与 hooks =====
+  const activeTeam: TeamPreset | undefined = useMemo(() => {
+    return appState.teamPresets.find(t => t.id === appState.activeTeamId);
+  }, [appState.teamPresets, appState.activeTeamId]);
+
+  const providersById: Record<string, ApiProviderConfig> = useMemo(() => {
+    const map: Record<string, ApiProviderConfig> = {};
+    for (const p of appState.apiProviders) map[p.id] = p;
+    return map;
+  }, [appState.apiProviders]);
+
+  const defaultMoePreset: MoeTeamPreset = useMemo(() => ({
+    id: 'default-moe',
+    name: 'Default MoE',
+    mode: 'moe',
+    stage1A: { roleId: 'stage1A', displayName: 'Stage1A', providerId: '', modelId: '' },
+    stage1B: { roleId: 'stage1B', displayName: 'Stage1B', providerId: '', modelId: '' },
+    stage2C: { roleId: 'stage2C', displayName: 'Stage2C', providerId: '', modelId: '' },
+    stage2D: { roleId: 'stage2D', displayName: 'Stage2D', providerId: '', modelId: '' },
+    summarizer: { roleId: 'summarizer', displayName: 'Summarizer', providerId: '', modelId: '' },
+  }), []);
+
+  const moePreset: MoeTeamPreset = useMemo(() => {
+    return (activeTeam && activeTeam.mode === 'moe' ? (activeTeam as MoeTeamPreset) : defaultMoePreset);
+  }, [activeTeam, defaultMoePreset]);
+
+  const { isRunning: isMoeRunning, stepsState, startMoeProcessing, stopGenerating: stopMoeGenerating, resetMoeMemory } = useMoeLogic({ 
+    providersById, 
+    preset: moePreset,
+    notepadContent,
+    onSummarizerReady: (sum) => {
+      if (sum?.content) {
+        const parsed = parseAIResponse(sum.content);
+        processNotepadUpdateFromAI(parsed, MessageSender.Cognito, addMessage);
+      } else if (sum?.errorMessage) {
+        addMessage(`[系统] Summarizer 失败：${sum.errorMessage}`, MessageSender.System, MessagePurpose.SystemNotification);
+      }
+    }
+  });
+  
+  // Reset MoE prev1 memory when API config mode toggles (align with initializeChat reinit effect)
+  useEffect(() => {
+    if (activeTeam && activeTeam.mode === 'moe') {
+      resetMoeMemory();
+    }
+  }, [useCustomApiConfig, useOpenAiApiConfig, activeTeam, resetMoeMemory]);
+
+  const onSendMessageUnified = useCallback(async (message: string, imageFile?: File | null) => {
+    if (activeTeam && activeTeam.mode === 'moe') {
+      // Before starting a new MoE run, snapshot previous run (if any final results exist)
+      try {
+        const anyFinal = stepsState && Object.values(stepsState).some((s: any) => s && (s.status === 'done' || s.status === 'error'));
+        if (!isMoeRunning && anyFinal && currentMoeEvent) {
+          const snapshot: Record<MoaStepId, MoaStepResult> = JSON.parse(JSON.stringify(stepsState));
+          setMoeRunHistory(prev => [...prev, { id: currentMoeEvent.runId, steps: snapshot, startedAt: currentMoeEvent.startedAt, anchorMessageId: currentMoeEvent.anchorMessageId }]);
+        }
+      } catch {}
+      // Insert user message first (with optional image metadata), then start MoE processing
+      let imageApiPart: { inlineData: { mimeType: string; data: string } } | undefined;
+      let userImageForDisplay: ChatMessage['image'] | undefined;
+      let userMsgId: string;
+      if (imageFile) {
+        // 先展示缩略图，保证用户气泡先渲染
+        const dataUrl = URL.createObjectURL(imageFile);
+        userImageForDisplay = { dataUrl, name: imageFile.name, type: imageFile.type };
+        flushSync(() => {
+          userMsgId = addMessage(message, MessageSender.User, MessagePurpose.UserInput, undefined, userImageForDisplay!);
+        });
+        const data = await fileToBase64(imageFile);
+        imageApiPart = { inlineData: { mimeType: imageFile.type, data } };
+      } else {
+        flushSync(() => {
+          userMsgId = addMessage(message, MessageSender.User, MessagePurpose.UserInput);
+        });
+      }
+      // anchor current live MoE bubble to this user message
+      const newRunId = generateUniqueId();
+      setCurrentMoeEvent({ runId: newRunId, startedAt: Date.now(), anchorMessageId: userMsgId });
+      await startMoeProcessing(message, imageApiPart);
+      return;
+    }
+    startChatProcessing(message, imageFile || undefined);
+  }, [activeTeam, startMoeProcessing, startChatProcessing, addMessage, stepsState, isMoeRunning, setMoeRunHistory, currentMoeEvent]);
+
+  const uiIsLoading = activeTeam && activeTeam.mode === 'moe' ? isMoeRunning : isLoading;
+
+  const handleStopGeneratingUnified = useCallback(() => {
+    if (activeTeam && activeTeam.mode === 'moe') {
+      stopMoeGenerating();
+    } else {
+      stopChatLogicGeneration();
+    }
+  }, [activeTeam, stopMoeGenerating, stopChatLogicGeneration]);
+
+  const showMoeBubble = useMemo(() => {
+    if (!(activeTeam && activeTeam.mode === 'moe')) return false;
+    if (isMoeRunning) return true;
+    // 仅当有完成/错误结果时显示，避免初始 thinking 状态常驻
+    try {
+      const anyFinal = stepsState && Object.values(stepsState).some(s => s && (s.status === 'done' || s.status === 'error'));
+      return !!anyFinal;
+    } catch {
+      return false;
+    }
+  }, [activeTeam, isMoeRunning, stepsState]);
+
   const modelSelectorBaseClass = "bg-white border border-gray-400 text-gray-800 text-sm rounded-md p-1.5 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none disabled:opacity-70 disabled:cursor-not-allowed";
   const modelSelectorWidthClass = "w-40 md:w-44"; 
 
@@ -428,62 +557,71 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-1 md:space-x-2 flex-wrap justify-end gap-y-2">
-          {useOpenAiApiConfig ? (
+          {!hideLegacyModelSelectors && (
             <>
-              <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '未指定'}`}>
-                <Brain size={18} className="mr-1.5 text-indigo-600 flex-shrink-0" />
-                <span className="text-sm font-medium text-indigo-700 whitespace-nowrap hidden sm:inline">Cognito:</span>
-                <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '未指定'}</span>
-              </div>
+              {useOpenAiApiConfig ? (
+                <>
+                  <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '未指定'}`}>
+                    <Brain size={18} className="mr-1.5 text-indigo-600 flex-shrink-0" />
+                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap hidden sm:inline">Cognito:</span>
+                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '未指定'}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '未指定'}`}>
+                    <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" />
+                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap hidden sm:inline">Muse:</span>
+                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '未指定'}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center" title={`Cognito Model: ${actualCognitoModelDetails.name}`}>
+                    <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 模型</label>
+                    <Brain size={18} className="mr-1.5 text-green-600 flex-shrink-0" aria-hidden="true" />
+                    <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Cognito:</span>
+                    <select 
+                      id="cognitoModelSelector" 
+                      value={selectedCognitoModelApiName} 
+                      onChange={(e) => setSelectedCognitoModelApiName(e.target.value)}
+                      className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
+                      aria-label="选择Cognito的AI模型" 
+                      disabled={uiIsLoading || useOpenAiApiConfig}>
+                      {MODELS.map((model) => (<option key={`cognito-${model.id}`} value={model.apiName}>{model.name}</option>))}
+                    </select>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center" title={`Muse Model: ${actualMuseModelDetails.name}`}>
+                    <label htmlFor="museModelSelector" className="sr-only">Muse AI 模型</label>
+                    <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" aria-hidden="true" />
+                    <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Muse:</span>
+                    <select 
+                      id="museModelSelector" 
+                      value={selectedMuseModelApiName} 
+                      onChange={(e) => setSelectedMuseModelApiName(e.target.value)}
+                      className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
+                      aria-label="选择Muse的AI模型" 
+                      disabled={uiIsLoading || useOpenAiApiConfig}>
+                      {MODELS.map((model) => (<option key={`muse-${model.id}`} value={model.apiName}>{model.name}</option>))}
+                    </select>
+                  </div>
+                </>
+              )}
               <Separator />
-              <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '未指定'}`}>
-                <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" />
-                <span className="text-sm font-medium text-purple-700 whitespace-nowrap hidden sm:inline">Muse:</span>
-                <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '未指定'}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center" title={`Cognito Model: ${actualCognitoModelDetails.name}`}>
-                 <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 模型</label>
-                 <Brain size={18} className="mr-1.5 text-green-600 flex-shrink-0" aria-hidden="true" />
-                <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Cognito:</span>
-                <select 
-                  id="cognitoModelSelector" 
-                  value={selectedCognitoModelApiName} 
-                  onChange={(e) => setSelectedCognitoModelApiName(e.target.value)}
-                  className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                  aria-label="选择Cognito的AI模型" 
-                  disabled={isLoading || useOpenAiApiConfig}>
-                  {MODELS.map((model) => (<option key={`cognito-${model.id}`} value={model.apiName}>{model.name}</option>))}
-                </select>
-              </div>
-              <Separator />
-              <div className="flex items-center" title={`Muse Model: ${actualMuseModelDetails.name}`}>
-                <label htmlFor="museModelSelector" className="sr-only">Muse AI 模型</label>
-                <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" aria-hidden="true" />
-                <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Muse:</span>
-                <select 
-                  id="museModelSelector" 
-                  value={selectedMuseModelApiName} 
-                  onChange={(e) => setSelectedMuseModelApiName(e.target.value)}
-                  className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                  aria-label="选择Muse的AI模型" 
-                  disabled={isLoading || useOpenAiApiConfig}>
-                  {MODELS.map((model) => (<option key={`muse-${model.id}`} value={model.apiName}>{model.name}</option>))}
-                </select>
-              </div>
             </>
           )}
-          <Separator />
-           <button onClick={openSettingsModal}
+          <button onClick={openTeamModal}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="打开设置" title="打开设置" disabled={isLoading && !cancelRequestRef.current && !failedStepInfo}>
+            aria-label="打开团队管理" title="打开团队管理" disabled={uiIsLoading}>
+            <Database size={20} />
+          </button>
+          <button onClick={openSettingsModal}
+            className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
+            aria-label="打开设置" title="打开设置" disabled={uiIsLoading}>
             <Settings2 size={20} /> 
           </button>
           <button onClick={handleClearChat}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="清空会话" title="清空会话" disabled={isLoading && !cancelRequestRef.current && !failedStepInfo}
+            aria-label="清空会话" title="清空会话" disabled={uiIsLoading}
             ><RefreshCwIcon size={20} /> 
           </button>
         </div>
@@ -502,23 +640,46 @@ const App: React.FC = () => {
                 className="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-200 scroll-smooth"
                 onScroll={handleChatScroll}
               >
-                {messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    failedStepPayloadForThisMessage={failedStepInfo && msg.id === failedStepInfo.originalSystemErrorMsgId ? failedStepInfo : null}
-                    onManualRetry={retryFailedStep} 
-                  />
-                ))}
+                {
+                  // Build interleaved timeline by timestamp
+                  (() => {
+                    type Item = { type: 'msg'; time: number; key: string; msg: ChatMessage } | { type: 'moe'; time: number; key: string; steps: Record<MoaStepId, MoaStepResult> };
+                    const items: Item[] = [];
+                    for (const m of messages) {
+                      items.push({ type: 'msg', time: (m.timestamp instanceof Date ? m.timestamp.getTime() : new Date(m.timestamp as any).getTime()), key: `msg-${m.id}` , msg: m });
+                    }
+                    for (const run of moeRunHistory) {
+                      items.push({ type: 'moe', time: run.startedAt, key: `moe-hist-${run.id}`, steps: run.steps });
+                    }
+                    if (currentMoeEvent && showMoeBubble) {
+                      items.push({ type: 'moe', time: currentMoeEvent.startedAt, key: `moe-live-${currentMoeEvent.runId}`, steps: stepsState as Record<MoaStepId, MoaStepResult> });
+                    }
+                    items.sort((a, b) => a.time - b.time);
+                    return items.map(it => {
+                      if (it.type === 'msg') {
+                        const msg = it.msg;
+                        return (
+                          <MessageBubble
+                            key={it.key}
+                            message={msg}
+                            failedStepPayloadForThisMessage={failedStepInfo && msg.id === failedStepInfo.originalSystemErrorMsgId ? failedStepInfo : null}
+                            onManualRetry={retryFailedStep}
+                          />
+                        );
+                      }
+                      return <MoaBubble key={it.key} steps={it.steps} />;
+                    });
+                  })()
+                }
               </div>
               <ChatInput
-                onSendMessage={startChatProcessing} 
-                isLoading={isLoading}
+                onSendMessage={onSendMessageUnified}
+                isLoading={uiIsLoading}
                 isApiKeyMissing={apiKeyStatus.isMissing || apiKeyStatus.isInvalid || false}
-                onStopGenerating={handleStopGeneratingAppLevel}
+                onStopGenerating={handleStopGeneratingUnified}
               />
               <div className="px-4 py-2 text-xs text-gray-600 text-center bg-gray-100">
-                {isLoading ? (
+                {uiIsLoading ? (
                   isInternalDiscussionActive ? (
                     <>
                       <span>
@@ -580,9 +741,10 @@ const App: React.FC = () => {
           <Notepad 
             content={notepadContent} 
             lastUpdatedBy={lastNotepadUpdateBy} 
-            isLoading={isLoading} 
+            isLoading={uiIsLoading} 
             isNotepadFullscreen={isNotepadFullscreen}
             onToggleFullscreen={toggleNotepadFullscreen}
+            onEdit={applyUserEdit}
             onUndo={undoNotepad}
             onRedo={redoNotepad}
             canUndo={canUndo}
@@ -644,6 +806,9 @@ const App: React.FC = () => {
           openAiMuseModelId={openAiMuseModelId}
           onOpenAiMuseModelIdChange={(e) => setOpenAiMuseModelId(e.target.value)}
         />
+      )}
+      {isTeamModalOpen && (
+        <TeamManagementModal isOpen={isTeamModalOpen} onClose={closeTeamModal} />
       )}
     </div>
   );

@@ -51,7 +51,8 @@ export const generateResponse = async (
   customApiEndpoint?: string,
   systemInstruction?: string,
   imagePart?: { inlineData: { mimeType: string; data: string } },
-  thinkingConfig?: { thinkingBudget: number }
+  thinkingConfig?: { thinkingBudget: number },
+  generationConfig?: { temperature?: number; topP?: number; topK?: number; maxOutputTokens?: number }
 ): Promise<GeminiResponsePayload> => {
   const startTime = performance.now();
   try {
@@ -85,16 +86,19 @@ export const generateResponse = async (
     
     const genAI = createGoogleAIClient(apiKeyToUse, endpointForClient);
 
-    const configForApi: {
-      systemInstruction?: string;
-      thinkingConfig?: { thinkingBudget: number };
-    } = {};
+    const configForApi: Record<string, any> = {};
 
     if (systemInstruction) {
       configForApi.systemInstruction = systemInstruction;
     }
-    if (thinkingConfig) {
-      configForApi.thinkingConfig = thinkingConfig;
+    if (thinkingConfig) configForApi.thinkingConfig = thinkingConfig;
+    if (generationConfig) {
+      const gc: Record<string, any> = {};
+      if (generationConfig.temperature !== undefined) gc.temperature = generationConfig.temperature;
+      if (generationConfig.topP !== undefined) gc.topP = generationConfig.topP;
+      if (generationConfig.topK !== undefined) gc.topK = generationConfig.topK;
+      if (generationConfig.maxOutputTokens !== undefined) gc.maxOutputTokens = generationConfig.maxOutputTokens;
+      if (Object.keys(gc).length > 0) configForApi.generationConfig = gc;
     }
 
     const textPart: Part = { text: prompt };
