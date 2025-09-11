@@ -11,6 +11,7 @@ export enum MessagePurpose {
   CognitoToMuse = 'cognito-to-muse',      // Cognito's message to Muse for discussion
   MuseToCognito = 'muse-to-cognito',      // Muse's response to Cognito
   FinalResponse = 'final-response',       // Final response from Cognito to User
+  Cancelled = 'cancelled',                // User cancelled the current AI response
 }
 
 export interface ChatMessage {

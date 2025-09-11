@@ -45,7 +45,11 @@ const getSenderNameStyle = (sender: MessageSender): string => {
 }
 
 const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageText: string): string => {
-  let baseStyle = "mb-4 p-4 rounded-lg shadow-md max-w-xl break-words relative border "; 
+  let baseStyle = "mb-4 p-4 rounded-lg shadow-md break-words whitespace-pre-wrap overflow-hidden relative border "; 
+  // Neutral, pale gray AI bubble for cancelled replies
+  if (purpose === MessagePurpose.Cancelled) {
+    return "mb-4 inline-block max-w-[70%] mr-auto rounded-[14px] px-4 py-2 bg-gray-50 text-gray-400 shadow-none border border-gray-200";
+  }
   if (purpose === MessagePurpose.SystemNotification) {
     if (
       messageText.toLowerCase().includes("error") ||
@@ -61,13 +65,14 @@ const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageT
   }
   switch (sender) {
     case MessageSender.User:
-      return baseStyle + "bg-blue-500 text-white border-blue-600 ml-auto rounded-bl-none";
+      // Compact rectangular bubble with oval corners; prevents circular shape for very short text
+      return "mb-4 inline-block max-w-[70%] ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle";
     case MessageSender.Cognito:
-      return baseStyle + "bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
+      return baseStyle + "max-w-xl bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
     case MessageSender.Muse:
-      return baseStyle + "bg-purple-50 border-purple-300 text-purple-800 mr-auto rounded-br-none";
+      return baseStyle + "max-w-xl bg-purple-50 border-purple-300 text-purple-800 mr-auto rounded-br-none";
     default:
-      return baseStyle + "bg-white border-gray-300 text-gray-700 mr-auto";
+      return baseStyle + "max-w-xl bg-white border-gray-300 text-gray-700 mr-auto";
   }
 };
 
@@ -104,7 +109,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, f
   ) && messageText.startsWith("(AI") && messageText.endsWith(")");
 
   const shouldRenderMarkdown = 
-    (sender === MessageSender.User || sender === MessageSender.Cognito || sender === MessageSender.Muse) &&
+    (sender === MessageSender.Cognito || sender === MessageSender.Muse) &&
     !isPlaceholderAiMessage &&
     purpose !== MessagePurpose.SystemNotification; 
 
@@ -131,10 +136,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, f
     }
   };
 
-  const canCopy = (sender === MessageSender.User || sender === MessageSender.Cognito || sender === MessageSender.Muse) && purpose !== MessagePurpose.SystemNotification && messageText.length > 0;
-  const bubbleTextColorClass = sender === MessageSender.User ? 'text-gray-100' : 'text-gray-800';
-  const bubblePurposePrefixColorClass = sender === MessageSender.User ? 'text-gray-200' : 'text-gray-700';
-  const bubbleTimestampColorClass = sender === MessageSender.User ? 'text-blue-200' : 'text-gray-500';
+  // Only allow copy for AI messages to keep user bubble clean
+  const canCopy = (sender === MessageSender.Cognito || sender === MessageSender.Muse) && purpose !== MessagePurpose.SystemNotification && messageText.length > 0;
+  const bubbleTextColorClass = 'text-gray-800';
+  const bubblePurposePrefixColorClass = 'text-gray-700';
+  const bubbleTimestampColorClass = 'text-gray-500';
 
   const showManualRetryButton = failedStepPayloadForThisMessage && 
                                 messageId === failedStepPayloadForThisMessage.originalSystemErrorMsgId && 
@@ -155,11 +161,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, f
             {isCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
           </button>
         )}
-        <div className="flex items-center mb-1">
-          <SenderIcon sender={sender} purpose={purpose} messageText={messageText} />
-          <span className={`font-semibold ${getSenderNameStyle(sender)}`}>{sender}</span>
-          {isDiscussionStep && <span className={`ml-2 text-xs ${sender === MessageSender.User ? 'text-blue-200' : 'text-gray-500'}`}>(内部讨论)</span>}
-        </div>
+        {sender !== MessageSender.User && (
+          <div className="flex items-center mb-1">
+            <SenderIcon sender={sender} purpose={purpose} messageText={messageText} />
+            <span className={`font-semibold ${getSenderNameStyle(sender)}`}>{sender}</span>
+            {isDiscussionStep && <span className={`ml-2 text-xs text-gray-500`}>(内部讨论)</span>}
+          </div>
+        )}
         
         {messageText && ( 
           shouldRenderMarkdown ? (
@@ -193,12 +201,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, f
             />
           </div>
         )}
-        <div className={`text-xs ${bubbleTimestampColorClass} mt-2 flex justify-between items-center`}>
-          <span>{formattedTime}</span>
-          {showDuration && (
-            <span className="italic"> (耗时: {(durationMs / 1000).toFixed(2)}s)</span>
-          )}
-        </div>
+        {sender !== MessageSender.User && (
+          <div className={`text-xs ${bubbleTimestampColorClass} mt-2 flex justify-between items-center`}>
+            <span>{formattedTime}</span>
+            {showDuration && (
+              <span className="italic"> (耗时: {(durationMs / 1000).toFixed(2)}s)</span>
+            )}
+          </div>
+        )}
         {showManualRetryButton && failedStepPayloadForThisMessage && onManualRetry && (
           <div className="mt-2 flex justify-center">
             <button

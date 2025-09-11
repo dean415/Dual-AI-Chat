@@ -16,7 +16,6 @@ import {
   MUSE_SYSTEM_PROMPT_HEADER,
   DEFAULT_MANUAL_FIXED_TURNS,
   MIN_MANUAL_FIXED_TURNS,
-  INITIAL_NOTEPAD_CONTENT,
   AiModel,
   // Gemini Custom API Keys
   CUSTOM_API_ENDPOINT_STORAGE_KEY,
@@ -32,16 +31,17 @@ import {
   DEFAULT_OPENAI_COGNITO_MODEL_ID,
   DEFAULT_OPENAI_MUSE_MODEL_ID,
 } from './constants';
-import { BotMessageSquare, AlertTriangle, RefreshCcw as RefreshCwIcon, Settings2, Brain, Sparkles, Database } from 'lucide-react'; 
+import { AlertTriangle, RefreshCcw as RefreshCwIcon, Settings2, Database } from 'lucide-react'; 
 
 import { useChatLogic } from './hooks/useChatLogic';
 import { useNotepadLogic } from './hooks/useNotepadLogic';
 import { useAppUI } from './hooks/useAppUI';
-import { generateUniqueId, getWelcomeMessageText, fileToBase64, parseAIResponse } from './utils/appUtils';
+import { generateUniqueId, fileToBase64, parseAIResponse } from './utils/appUtils';
 import { useAppStore } from './store/appStore';
 import { useMoeLogic } from './hooks/useMoeLogic';
 import type { MoeTeamPreset, TeamPreset, ApiProviderConfig } from './types';
 import MoaBubble from './components/MoaBubble';
+import LeftToolbar from './components/LeftToolbar';
 
 const DEFAULT_CHAT_PANEL_PERCENT = 60; 
 const FONT_SIZE_STORAGE_KEY = 'dualAiChatFontSizeScale';
@@ -131,7 +131,7 @@ interface ApiKeyStatus {
     redoNotepad,
     canUndo,
     canRedo,
-  } = useNotepadLogic(INITIAL_NOTEPAD_CONTENT);
+  } = useNotepadLogic("");
 
   const addMessage = useCallback((
     text: string,
@@ -158,7 +158,7 @@ interface ApiKeyStatus {
     if (useOpenAiApiConfig) {
       return {
         id: 'openai-cognito',
-        name: `OpenAI Cognito: ${openAiCognitoModelId || '未指定'}`,
+        name: `OpenAI Cognito: ${openAiCognitoModelId || 'Unspecified'}`,
         apiName: openAiCognitoModelId || DEFAULT_OPENAI_COGNITO_MODEL_ID,
         supportsThinkingConfig: false, 
         supportsSystemInstruction: true, 
@@ -171,7 +171,7 @@ interface ApiKeyStatus {
     if (useOpenAiApiConfig) {
       return { 
         id: 'openai-muse',
-        name: `OpenAI Muse: ${openAiMuseModelId || '未指定'}`,
+        name: `OpenAI Muse: ${openAiMuseModelId || 'Unspecified'}`,
         apiName: openAiMuseModelId || DEFAULT_OPENAI_MUSE_MODEL_ID,
         supportsThinkingConfig: false,
         supportsSystemInstruction: true,
@@ -260,36 +260,22 @@ interface ApiKeyStatus {
     let missingKeyMsg = "";
     if (useOpenAiApiConfig) {
       if (!openAiApiBaseUrl.trim() || !openAiCognitoModelId.trim() || !openAiMuseModelId.trim()) {
-        missingKeyMsg = "OpenAI API 配置不完整 (需要基地址和Cognito/Muse的模型ID)。请在设置中提供，或关闭“使用OpenAI API配置”。";
+        missingKeyMsg = "OpenAI API config is incomplete (requires base URL and Cognito/Muse model IDs). Provide them in Settings or disable 'Use OpenAI API config'.";
       }
     } else if (useCustomApiConfig) {
       if (!customApiKey.trim()) {
-        missingKeyMsg = "自定义 Gemini API 密钥未在设置中提供。请在设置中输入密钥，或关闭“使用自定义API配置”。";
+        missingKeyMsg = "Custom Gemini API key is missing. Enter the key in Settings or disable 'Use Custom API config'.";
       }
     } else {
       if (!(process.env.API_KEY && process.env.API_KEY.trim() !== "")) {
-        missingKeyMsg = "Google Gemini API 密钥未在环境变量中配置。请配置该密钥，或在设置中启用并提供自定义API配置。";
+        missingKeyMsg = "Google Gemini API key is not configured in the environment. Configure it, or enable and provide a custom API config in Settings.";
       }
     }
 
     if (missingKeyMsg) {
-      const fullWarning = `严重警告：${missingKeyMsg} 在此之前，应用程序功能将受限。`;
+      const fullWarning = `Critical warning: ${missingKeyMsg} App features are limited until this is resolved.`;
       addMessage(fullWarning, MessageSender.System, MessagePurpose.SystemNotification);
       setApiKeyStatus({ isMissing: true, message: missingKeyMsg });
-    } else {
-      addMessage(
-        getWelcomeMessageText(
-            actualCognitoModelDetails.name, 
-            actualMuseModelDetails.name, 
-            discussionMode, 
-            manualFixedTurns, 
-            useOpenAiApiConfig, 
-            openAiCognitoModelId, 
-            openAiMuseModelId
-        ),
-        MessageSender.System,
-        MessagePurpose.SystemNotification
-      );
     }
   }, [addMessage, clearNotepadContent, actualCognitoModelDetails.name, actualMuseModelDetails.name, discussionMode, manualFixedTurns, setIsNotepadFullscreen, useCustomApiConfig, customApiKey, useOpenAiApiConfig, openAiApiBaseUrl, openAiApiKey, openAiCognitoModelId, openAiMuseModelId]);
 
@@ -298,25 +284,6 @@ interface ApiKeyStatus {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCustomApiConfig, useOpenAiApiConfig]); // Re-initialize if API config mode changes
 
-   useEffect(() => {
-     const welcomeMessage = messages.find(msg => msg.sender === MessageSender.System && msg.text.startsWith("欢迎使用Dual AI Chat！"));
-     if (welcomeMessage && !apiKeyStatus.isMissing && !apiKeyStatus.isInvalid) {
-        setMessages(msgs => msgs.map(msg =>
-            msg.id === welcomeMessage.id
-            ? {...msg, text: getWelcomeMessageText(
-                actualCognitoModelDetails.name, 
-                actualMuseModelDetails.name, 
-                discussionMode, 
-                manualFixedTurns, 
-                useOpenAiApiConfig, 
-                openAiCognitoModelId, 
-                openAiMuseModelId
-            ) }
-            : msg
-        ));
-     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actualCognitoModelDetails.name, actualMuseModelDetails.name, apiKeyStatus.isMissing, apiKeyStatus.isInvalid, discussionMode, manualFixedTurns, useOpenAiApiConfig, openAiCognitoModelId, openAiMuseModelId]); 
 
 
   useEffect(() => {
@@ -346,7 +313,7 @@ interface ApiKeyStatus {
   }, [isLoading, stopChatLogicGeneration, initializeChat]);
 
   const handleStopGeneratingAppLevel = useCallback(() => {
-    // 在 MoE 模式下，使用 MoE 的停止；否则保持原有逻辑
+    // �?MoE 妯″紡涓嬶紝浣跨敤 MoE 鐨勫仠姝紱鍚﹀垯淇濇寔鍘熸湁閫昏緫
     if (activeTeam && activeTeam.mode === 'moe') {
       // will be defined later; placeholder for type
     } else {
@@ -406,19 +373,19 @@ interface ApiKeyStatus {
   const apiKeyBannerMessage = useMemo(() => {
     if (!apiKeyStatus.message) return null;
     if (useOpenAiApiConfig) {
-        if (apiKeyStatus.isMissing) return "OpenAI API 配置不完整 (需基地址和Cognito/Muse模型ID)。请在设置中提供，或关闭 OpenAI API 配置。";
-        if (apiKeyStatus.isInvalid) return "提供的 OpenAI API 密钥无效或无法访问服务。请检查设置和网络。";
+        if (apiKeyStatus.isMissing) return "OpenAI API config is incomplete (base URL + Cognito/Muse model IDs).";
+        if (apiKeyStatus.isInvalid) return "Provided OpenAI API key is invalid or service is unreachable.";
     } else if (useCustomApiConfig) {
-        if (apiKeyStatus.isMissing) return "自定义 Gemini API 密钥缺失。请在设置中提供，或关闭自定义 Gemini API 配置。";
-        if (apiKeyStatus.isInvalid) return "提供的自定义 Gemini API 密钥无效或权限不足。请检查设置中的密钥。";
+        if (apiKeyStatus.isMissing) return "Custom Gemini API key is missing.";
+        if (apiKeyStatus.isInvalid) return "Custom Gemini API key is invalid or lacks permissions.";
     } else {
-        if (apiKeyStatus.isMissing) return "环境变量中的 Google Gemini API 密钥缺失。请配置，或启用自定义 API 配置。";
-        if (apiKeyStatus.isInvalid) return "环境变量中的 Google Gemini API 密钥无效或权限不足。请检查该密钥。";
+        if (apiKeyStatus.isMissing) return "Google Gemini API key is missing from environment.";
+        if (apiKeyStatus.isInvalid) return "Google Gemini API key in environment is invalid or unauthorized.";
     }
     return apiKeyStatus.message; 
   }, [apiKeyStatus, useCustomApiConfig, useOpenAiApiConfig]);
 
-  // ===== MoE 接入：计算 activeTeam 与 hooks =====
+  // ===== MoE 鎺ュ叆锛氳�?activeTeam �?hooks =====
   const activeTeam: TeamPreset | undefined = useMemo(() => {
     return appState.teamPresets.find(t => t.id === appState.activeTeamId);
   }, [appState.teamPresets, appState.activeTeamId]);
@@ -453,7 +420,7 @@ interface ApiKeyStatus {
         const parsed = parseAIResponse(sum.content);
         processNotepadUpdateFromAI(parsed, MessageSender.Cognito, addMessage);
       } else if (sum?.errorMessage) {
-        addMessage(`[系统] Summarizer 失败：${sum.errorMessage}`, MessageSender.System, MessagePurpose.SystemNotification);
+        addMessage(`[system] Summarizer failure�?{sum.errorMessage}`, MessageSender.System, MessagePurpose.SystemNotification);
       }
     }
   });
@@ -480,7 +447,7 @@ interface ApiKeyStatus {
       let userImageForDisplay: ChatMessage['image'] | undefined;
       let userMsgId: string;
       if (imageFile) {
-        // 先展示缩略图，保证用户气泡先渲染
+
         const dataUrl = URL.createObjectURL(imageFile);
         userImageForDisplay = { dataUrl, name: imageFile.name, type: imageFile.type };
         flushSync(() => {
@@ -515,11 +482,10 @@ interface ApiKeyStatus {
   const showMoeBubble = useMemo(() => {
     if (!(activeTeam && activeTeam.mode === 'moe')) return false;
     if (isMoeRunning) return true;
-    // 仅当有完成/错误结果时显示，避免初始 thinking 状态常驻
     try {
-      const anyFinal = stepsState && Object.values(stepsState).some(s => s && (s.status === 'done' || s.status === 'error'));
+      const anyFinal = stepsState && Object.values(stepsState as any).some((s: any) => s && (s.status === 'done' || s.status === 'error'));
       return !!anyFinal;
-    } catch {
+    } catch (e) {
       return false;
     }
   }, [activeTeam, isMoeRunning, stepsState]);
@@ -549,34 +515,38 @@ interface ApiKeyStatus {
 
 
   return (
-    <div className={`flex flex-col h-screen bg-white shadow-2xl overflow-hidden border-x border-gray-300 ${isNotepadFullscreen ? 'fixed inset-0 z-40' : 'relative'}`}>
-      <header className={`p-3 md:p-4 bg-gray-50 border-b border-gray-300 flex items-center justify-between shrink-0 space-x-2 md:space-x-3 flex-wrap ${isNotepadFullscreen ? 'relative z-0' : 'relative z-10'}`}>
-        <div className="flex items-center shrink-0">
-          <BotMessageSquare size={28} className="mr-2 md:mr-3 text-sky-600" />
-          <h1 className="text-xl md:text-2xl font-semibold text-sky-600">Dual AI Chat</h1>
-        </div>
+    <>
+      <LeftToolbar
+        onOpenTeam={openTeamModal}
+        onOpenSettings={openSettingsModal}
+        onClearChat={handleClearChat}
+        disabled={uiIsLoading}
+      />
+      <div className={`flex flex-col h-screen bg-white shadow-2xl overflow-hidden ${isNotepadFullscreen ? 'fixed inset-0 z-40' : 'relative'} pl-12 md:pl-14`}>
+      {/* header removed per new design */}
+        
 
-        <div className="flex items-center space-x-1 md:space-x-2 flex-wrap justify-end gap-y-2">
-          {!hideLegacyModelSelectors && (
+        {/*
+          {false && (
             <>
               {useOpenAiApiConfig ? (
                 <>
-                  <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '未指定'}`}>
+                  <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '鏈寚锟?}`}>
                     <Brain size={18} className="mr-1.5 text-indigo-600 flex-shrink-0" />
                     <span className="text-sm font-medium text-indigo-700 whitespace-nowrap hidden sm:inline">Cognito:</span>
-                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '未指定'}</span>
+                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '鏈寚锟?}</span>
                   </div>
                   <Separator />
-                  <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '未指定'}`}>
+                  <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '鏈寚锟?}`}>
                     <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" />
                     <span className="text-sm font-medium text-purple-700 whitespace-nowrap hidden sm:inline">Muse:</span>
-                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '未指定'}</span>
+                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '鏈寚锟?}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="flex items-center" title={`Cognito Model: ${actualCognitoModelDetails.name}`}>
-                    <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 模型</label>
+                    <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 妯″�?/label>
                     <Brain size={18} className="mr-1.5 text-green-600 flex-shrink-0" aria-hidden="true" />
                     <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Cognito:</span>
                     <select 
@@ -584,14 +554,14 @@ interface ApiKeyStatus {
                       value={selectedCognitoModelApiName} 
                       onChange={(e) => setSelectedCognitoModelApiName(e.target.value)}
                       className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                      aria-label="选择Cognito的AI模型" 
+                      aria-label="閫夋嫨Cognito鐨凙I妯″�? 
                       disabled={uiIsLoading || useOpenAiApiConfig}>
                       {MODELS.map((model) => (<option key={`cognito-${model.id}`} value={model.apiName}>{model.name}</option>))}
                     </select>
                   </div>
                   <Separator />
                   <div className="flex items-center" title={`Muse Model: ${actualMuseModelDetails.name}`}>
-                    <label htmlFor="museModelSelector" className="sr-only">Muse AI 模型</label>
+                    <label htmlFor="museModelSelector" className="sr-only">Muse AI 妯″�?/label>
                     <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" aria-hidden="true" />
                     <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Muse:</span>
                     <select 
@@ -599,7 +569,7 @@ interface ApiKeyStatus {
                       value={selectedMuseModelApiName} 
                       onChange={(e) => setSelectedMuseModelApiName(e.target.value)}
                       className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                      aria-label="选择Muse的AI模型" 
+                      aria-label="閫夋嫨Muse鐨凙I妯″�? 
                       disabled={uiIsLoading || useOpenAiApiConfig}>
                       {MODELS.map((model) => (<option key={`muse-${model.id}`} value={model.apiName}>{model.name}</option>))}
                     </select>
@@ -611,21 +581,21 @@ interface ApiKeyStatus {
           )}
           <button onClick={openTeamModal}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="打开团队管理" title="打开团队管理" disabled={uiIsLoading}>
+            aria-label="鎵撳紑鍥㈤槦绠＄�? title="鎵撳紑鍥㈤槦绠＄�? disabled={uiIsLoading}>
             <Database size={20} />
           </button>
           <button onClick={openSettingsModal}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="打开设置" title="打开设置" disabled={uiIsLoading}>
+            aria-label="鎵撳紑璁剧疆" title="鎵撳紑璁剧疆" disabled={uiIsLoading}>
             <Settings2 size={20} /> 
           </button>
           <button onClick={handleClearChat}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="清空会话" title="清空会话" disabled={uiIsLoading}
+            aria-label="娓呯┖浼氳瘽" title="娓呯┖浼氳瘽" disabled={uiIsLoading}
             ><RefreshCwIcon size={20} /> 
           </button>
         </div>
-      </header>
+        */}
 
       <div ref={panelsContainerRef} className={`flex flex-row flex-grow overflow-hidden ${isNotepadFullscreen ? 'relative' : ''}`}>
         {!isNotepadFullscreen && (
@@ -637,7 +607,7 @@ interface ApiKeyStatus {
             <div className="flex flex-col flex-grow h-full"> 
               <div 
                 ref={chatContainerRef} 
-                className="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-200 scroll-smooth"
+                className="flex-grow p-4 space-y-4 overflow-y-auto bg-white scroll-smooth chat-scrollbar"
                 onScroll={handleChatScroll}
               >
                 {
@@ -678,35 +648,7 @@ interface ApiKeyStatus {
                 isApiKeyMissing={apiKeyStatus.isMissing || apiKeyStatus.isInvalid || false}
                 onStopGenerating={handleStopGeneratingUnified}
               />
-              <div className="px-4 py-2 text-xs text-gray-600 text-center bg-gray-100">
-                {uiIsLoading ? (
-                  isInternalDiscussionActive ? (
-                    <>
-                      <span>
-                        AI 内部讨论: 第 {currentDiscussionTurn + 1} 轮
-                        {discussionMode === DiscussionMode.FixedTurns && ` / ${manualFixedTurns} 轮`}
-                      </span>
-                      {currentTotalProcessingTimeMs > 0 && (
-                        <>
-                          <span className="mx-2" aria-hidden="true">|</span>
-                          <span>耗时: {(currentTotalProcessingTimeMs / 1000).toFixed(2)}s</span>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <span>
-                      AI 正在处理...
-                      {currentTotalProcessingTimeMs > 0 && ` 耗时: ${(currentTotalProcessingTimeMs / 1000).toFixed(2)}s`}
-                    </span>
-                  )
-                ) : (
-                  <span>
-                    准备就绪
-                    {currentTotalProcessingTimeMs > 0 && ` | 上次耗时: ${(currentTotalProcessingTimeMs / 1000).toFixed(2)}s`}
-                    {lastCompletedTurnCount > 0 && ` | 上次轮数: ${lastCompletedTurnCount}`}
-                  </span>
-                )}
-              </div>
+
             </div>
           </div>
         )}
@@ -714,24 +656,24 @@ interface ApiKeyStatus {
         {!isNotepadFullscreen && (
           <div
             id="panel-resizer"
-            className="w-1.5 h-full bg-gray-300 hover:bg-sky-500 cursor-col-resize select-none shrink-0 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-sky-600"
+            className="w-px h-full bg-gray-100 hover:bg-gray-200 rounded-full cursor-col-resize select-none shrink-0 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-0"
             onMouseDown={handleMouseDownOnResizer}
             onKeyDown={handleResizerKeyDown}
             role="separator"
             aria-orientation="vertical"
-            aria-label="拖动以调整聊天和记事本面板大小"
+            aria-label="Drag to resize chat and canvas"
             aria-controls="chat-panel-wrapper notepad-panel-wrapper"
             aria-valuenow={chatPanelWidthPercent}
             aria-valuemin={20} 
             aria-valuemax={80} 
             tabIndex={0}
-            title="拖动或使用方向键调整大小"
+            title="Drag to resize chat and notepad"
           />
         )}
         
         <div
           id="notepad-panel-wrapper"
-          className={`h-full bg-gray-50 flex flex-col ${
+          className={`h-full bg-white flex flex-col ${
             isNotepadFullscreen 
             ? 'fixed inset-0 z-50 w-screen' 
             : 'overflow-hidden'
@@ -810,8 +752,10 @@ interface ApiKeyStatus {
       {isTeamModalOpen && (
         <TeamManagementModal isOpen={isTeamModalOpen} onClose={closeTeamModal} />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default App;
+

@@ -65,7 +65,7 @@ const Notepad: React.FC<NotepadProps> = ({
     }
   };
 
-  const notepadBaseClasses = "h-full flex flex-col bg-gray-50 border-l border-gray-300";
+  const notepadBaseClasses = "h-full flex flex-col bg-white";
   const fullscreenClasses = "fixed top-0 left-0 w-screen h-screen z-50 shadow-2xl";
 
   const lines = useMemo(() => content.split('\n'), [content]);
@@ -75,10 +75,10 @@ const Notepad: React.FC<NotepadProps> = ({
 
   return (
     <div className={`${notepadBaseClasses} ${isNotepadFullscreen ? fullscreenClasses : ''}`}>
-      <header className="p-3 border-b border-gray-300 flex items-center justify-between bg-gray-100 shrink-0">
+      <header className="p-3 flex items-center justify-between bg-white shrink-0">
         <div className="flex items-center">
-          <FileText size={20} className="mr-2 text-sky-600" />
-          <h2 className="text-lg font-semibold text-sky-700">Notebook</h2>
+          <FileText size={20} className="mr-2 text-black" />
+          <h2 className="text-lg font-semibold text-black">Canvas</h2>
         </div>
         <div className="flex items-center space-x-1 md:space-x-1.5">
           {isLoading && !isNotepadFullscreen && <span className="text-xs text-gray-500 italic mr-1">AI 思考中...</span>}
@@ -142,7 +142,7 @@ const Notepad: React.FC<NotepadProps> = ({
       <div className="flex-grow overflow-y-auto relative bg-white">
         {isPreviewMode ? (
           <div
-            className="markdown-preview"
+            className="markdown-preview notepad-scrollbar"
             dangerouslySetInnerHTML={{ __html: processedHtml }}
             aria-label="Markdown 预览"
             tabIndex={0}
@@ -152,7 +152,7 @@ const Notepad: React.FC<NotepadProps> = ({
           />
         ) : (
           <textarea
-            className="w-full h-full p-3 bg-white text-gray-800 font-mono text-base leading-relaxed outline-none resize-none"
+            className="w-full h-full p-3 bg-white text-gray-800 font-mono text-base leading-relaxed outline-none resize-none notepad-scrollbar"
             aria-label="共享记事本内容 (可编辑)"
             value={content}
             onChange={(e) => onEdit && onEdit(e.target.value)}

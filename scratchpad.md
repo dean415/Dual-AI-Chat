@@ -75,6 +75,33 @@ Definition of Done
 - [ ] E1 Discussion mode regression check
 - [ ] E2 MoE flow manual QA (progressive, stop, clear)
 
+---
+
+Channel-based Settings Refactor (API 渠道)
+
+- [x] S1 SettingsModal: 三页签骨架（General/API Channels/Advanced），General 仅保留“文字大小”。
+- [x] S2 API Channels: 列表与空态（读取 store）、新增/编辑/删除交互（调用 setProviders）。
+- [ ] S3 ApiChannelForm: 精简为四字段（名称/提供商/API Key/超时），默认超时 300，隐藏能力复选并按类型设默认。
+- [ ] S4 存储与迁移：SCHEMA_VERSION=2，迁移默认超时 300。
+- [ ] S5 useChatLogic 改造为渠道/角色驱动；移除 legacy props；接入 roleRunner。
+- [ ] S6 App.tsx 精简：移除旧 API 状态与欢迎文案分支；拼装 providersById + activeTeam；注入 hooks。
+- [ ] S7 providerAdapter 增加超时控制；统一错误映射。
+
+## Progress (Settings Refactor)
+
+- 2025-09-11: 完成 S1。
+  - 新增 `dual-ai-chat/components/settings/GeneralTab.tsx`、`.../ApiChannelsTab.tsx`、`.../AdvancedTab.tsx`。
+  - 重写 `dual-ai-chat/components/SettingsModal.tsx` 为三页签容器；保留旧 props 类型兼容，但 UI 仅展示：
+    - 常规设置：文字大小（小/中/大/特大）。
+    - API 渠道：空态与只读列表骨架（编辑/删除暂禁用）。
+    - 高级设置：占位文案。
+  - 下一步 S2：在 API Channels 页签接入 store 的增/编/删，使用确认对话与引用校验（团队管理）。
+\- 2025-09-11: 完成 S2。
+  - `ApiChannelsTab` 现已接入 `useAppStore()`，呈现列表与空态，并提供“新增/编辑/删除”。
+  - 新增/编辑：使用现有 `ApiChannelForm` 弹窗（后续 S3 再精简为四字段与必填校验）。
+  - 删除：删除前执行团队引用校验（Discussion/MoE 全角色），若被引用则阻止并给出提示；否则二次确认后删除。
+  - 下一步 S3：精简 `ApiChannelForm` 为四字段（名称/提供商/API Key/超时=300）并隐藏能力复选，按类型自动赋默认能力。
+
 ## Current Status / Progress Tracking
 
 - 2025‑09‑10: Orchestra activated in Planner role; seeded architecture plan and tasks.

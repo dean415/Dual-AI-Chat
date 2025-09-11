@@ -348,6 +348,9 @@ export const useChatLogic = ({
         }
       }
       setIsInternalDiscussionActive(false); 
+      if (cancelRequestRef.current && !failedStepInfo) {
+          addMessage("Request Cancel", MessageSender.Cognito, MessagePurpose.Cancelled);
+      }
 
       if (cancelRequestRef.current) return;
 
@@ -400,7 +403,7 @@ export const useChatLogic = ({
             setLastCompletedTurnCount(0); // Or decide to keep previous
         }
       }
-      if (cancelRequestRef.current && !failedStepInfo) {
+      if (cancelRequestRef.current && !failedStepInfo && false) {
         addMessage("用户已停止AI响应。", MessageSender.System, MessagePurpose.SystemNotification);
       }
       setIsInternalDiscussionActive(false);
@@ -605,6 +608,9 @@ export const useChatLogic = ({
         URL.revokeObjectURL(userImageForDisplay.dataUrl);
       }
       if (cancelRequestRef.current && !failedStepInfo) {
+        addMessage("Request Cancel", MessageSender.Cognito, MessagePurpose.Cancelled);
+      }
+      if (cancelRequestRef.current && !failedStepInfo && false) {
         addMessage("用户已停止AI响应。", MessageSender.System, MessagePurpose.SystemNotification);
       }
     }
@@ -722,7 +728,7 @@ export const useChatLogic = ({
           stopProcessingTimer();
       }
       setIsInternalDiscussionActive(false); 
-      if (cancelRequestRef.current && !failedStepInfo) {
+      if (cancelRequestRef.current && !failedStepInfo && false) {
           addMessage("用户已停止手动重试。", MessageSender.System, MessagePurpose.SystemNotification);
       }
     }
