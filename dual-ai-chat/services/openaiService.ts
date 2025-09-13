@@ -20,8 +20,9 @@ interface OpenAiMessageContentPartImage {
 type OpenAiMessageContentPart = OpenAiMessageContentPartText | OpenAiMessageContentPartImage;
 
 
-interface OpenAiChatMessage {
+export interface OpenAiChatMessage {
   role: 'system' | 'user' | 'assistant';
+  name?: string; // optional assistant name for third-party assistant messages
   content: string | Array<OpenAiMessageContentPart>;
 }
 
@@ -126,6 +127,77 @@ export const generateOpenAiResponse = async (
     const durationMs = performance.now() - startTime;
     let errorMessage = "与AI通信时发生未知错误。";
     let errorType = "Unknown AI error";
+    if (error instanceof Error) {
+      errorMessage = `与AI通信时出错: ${error.message}`;
+      errorType = error.name;
+    }
+    return { text: errorMessage, durationMs, error: errorType };
+  }
+};
+
+// New: messages-based OpenAI chat call with assistant.name support
+export const generateOpenAiChat = async (
+  messages: OpenAiChatMessage[],
+  modelId: string,
+  apiKey: string,
+  baseUrl: string,
+  options?: {
+    temperature?: number;
+    top_p?: number;
+    reasoning_effort?: 'low' | 'medium' | 'high';
+    verbosity?: 'low' | 'medium' | 'high';
+  }
+): Promise<OpenAiResponsePayload> => {
+  const startTime = performance.now();
+
+  const requestBody: any = {
+    model: modelId,
+    messages,
+  };
+  if (options) {
+    if (options.temperature !== undefined) requestBody.temperature = options.temperature;
+    if (options.top_p !== undefined) requestBody.top_p = options.top_p;
+    if (options.reasoning_effort !== undefined) requestBody.reasoning_effort = options.reasoning_effort;
+    if (options.verbosity !== undefined) requestBody.verbosity = options.verbosity;
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const durationMs = performance.now() - startTime;
+
+    if (!response.ok) {
+      let errorBody;
+      try { errorBody = await response.json(); } catch {}
+      const errorMessage =
+        errorBody?.error?.message ||
+        response.statusText ||
+        `请求失败，状态码: ${response.status}`;
+      let errorType = 'OpenAI API error';
+      if (response.status === 401 || response.status === 403) errorType = 'API key invalid or permission denied';
+      else if (response.status === 429) errorType = 'Quota exceeded';
+      console.error('OpenAI API Error:', errorMessage, 'Status:', response.status, 'Body:', errorBody);
+      return { text: errorMessage, durationMs, error: errorType };
+    }
+
+    const data = await response.json();
+    if (!data.choices || data.choices.length === 0 || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error('OpenAI API: 无效的响应结构', data);
+      return { text: 'AI响应格式无效。', durationMs, error: 'Invalid response structure' };
+    }
+    return { text: data.choices[0].message.content, durationMs };
+  } catch (error) {
+    console.error('调用OpenAI API时出错:', error);
+    const durationMs = performance.now() - startTime;
+    let errorMessage = '与AI通信时发生未知错误。';
+    let errorType = 'Unknown AI error';
     if (error instanceof Error) {
       errorMessage = `与AI通信时出错: ${error.message}`;
       errorType = error.name;

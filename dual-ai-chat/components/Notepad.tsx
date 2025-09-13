@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { MessageSender } from '../types';
-import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2 } from 'lucide-react';
+import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2, RefreshCcw as RefreshCwIcon } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import ThinkingAnimated from './ThinkingAnimated';
@@ -17,6 +17,7 @@ interface NotepadProps {
   canUndo: boolean;
   canRedo: boolean;
   onEdit?: (newContent: string) => void;
+  onClearChat?: () => void; // new: clear conversation button in toolbar
 }
 
 const Notepad: React.FC<NotepadProps> = ({ 
@@ -30,6 +31,7 @@ const Notepad: React.FC<NotepadProps> = ({
   canUndo,
   canRedo,
   onEdit,
+  onClearChat,
 }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
@@ -103,6 +105,16 @@ const Notepad: React.FC<NotepadProps> = ({
             <Redo2 size={18} />
           </button>
           <div className="h-4 w-px bg-gray-300 mx-1" aria-hidden="true"></div>
+          {onClearChat && (
+            <button
+              onClick={onClearChat}
+              className={baseButtonClass}
+              title="清空会话"
+              aria-label="清空会话"
+            >
+              <RefreshCwIcon size={18} />
+            </button>
+          )}
           <button
             onClick={onToggleFullscreen}
             className={baseButtonClass}

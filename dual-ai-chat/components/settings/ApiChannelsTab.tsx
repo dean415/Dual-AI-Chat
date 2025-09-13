@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Plus, PlugZap } from 'lucide-react';
+import { Plus, PlugZap, Minus } from 'lucide-react';
 import ApiChannelForm from '../ApiChannelForm';
 import BrandIcon from '../BrandIcon';
 import type { ApiProviderConfig, TeamPreset } from '../../types';
@@ -57,8 +57,7 @@ const ApiChannelsTab: React.FC = () => {
 
   return (
     <section className="space-y-3" aria-labelledby="api-channels-heading">
-      <div className="flex items-center justify-between">
-        <h3 id="api-channels-heading" className="text-lg font-semibold text-black">API 渠道管理</h3>
+      <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={openCreate}
@@ -71,6 +70,9 @@ const ApiChannelsTab: React.FC = () => {
       </div>
       {error && <div className="p-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded">{error}</div>}
 
+      {/* Soft divider between the top + button and the provider list */}
+      <div className="h-px bg-gray-200 my-2" aria-hidden="true"></div>
+
       <div className="space-y-3">
         {providers.length === 0 ? (
           <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -78,19 +80,35 @@ const ApiChannelsTab: React.FC = () => {
             暂无 API 渠道
           </div>
         ) : (
-          <ul className="divide-y border rounded">
+          <ul className="divide-y divide-gray-200">
             {providers.map(p => (
-              <li key={p.id} className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2">
+              <li key={p.id} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-2 px-1">
                   <BrandIcon brand={p.brandKey} src={p.brandIconUrl} size={16} />
                   <div>
-                    <div className="font-medium text-gray-900">{p.name}</div>
+                    <div className="font-medium text-gray-900 text-sm inline-flex items-center">
+                      <span>{p.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(p.id)}
+                        title="Delete channel"
+                        aria-label="Delete channel"
+                        className="ml-2 text-gray-400 hover:text-red-600 focus:outline-none"
+                      >
+                        <Minus size={14} />
+                      </button>
+                    </div>
                     <div className="text-xs text-gray-500">{p.providerType}</div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => openEdit(p.id)}>Edit</button>
-                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => onDelete(p.id)}>Delete</button>
+                <div className="pr-1">
+                  <button
+                    type="button"
+                    className="px-3 py-1 rounded-full border border-gray-300 text-black font-semibold text-sm bg-white hover:bg-gray-50"
+                    onClick={() => openEdit(p.id)}
+                  >
+                    Manage
+                  </button>
                 </div>
               </li>
             ))}

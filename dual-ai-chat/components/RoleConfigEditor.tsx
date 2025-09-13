@@ -7,10 +7,11 @@ interface Props {
   providers: ApiProviderConfig[];
   // Optional plain-text note for template variables, shown as {{var}} list
   availableVariablesText?: string;
+  hideUserPromptTemplate?: boolean;
   onChange: (role: RoleConfig) => void;
 }
 
-const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVariablesText, onChange }) => {
+const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVariablesText, hideUserPromptTemplate, onChange }) => {
   const params = role.parameters || {};
   const setParams = (next: Partial<RoleConfig['parameters']>) => {
     const merged = { ...(role.parameters || {}), ...next };
@@ -38,9 +39,11 @@ const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVa
         <label className="text-sm col-span-2">系统提示词
           <textarea className="mt-1 w-full border border-gray-300 rounded p-1.5 h-24" value={role.systemPrompt || ''} onChange={e => onChange({ ...role, systemPrompt: e.target.value })} />
         </label>
-        <label className="text-sm col-span-2">User 模板
-          <textarea className="mt-1 w-full border border-gray-300 rounded p-1.5 h-20" value={role.userPromptTemplate || ''} onChange={e => onChange({ ...role, userPromptTemplate: e.target.value })} />
-        </label>
+        {!hideUserPromptTemplate && (
+          <label className="text-sm col-span-2">User 模板
+            <textarea className="mt-1 w-full border border-gray-300 rounded p-1.5 h-20" value={role.userPromptTemplate || ''} onChange={e => onChange({ ...role, userPromptTemplate: e.target.value })} />
+          </label>
+        )}
         {/* Four common parameters with toggles */}
         <div className="col-span-2 grid grid-cols-2 gap-3">
           <div className="text-sm border rounded p-2">

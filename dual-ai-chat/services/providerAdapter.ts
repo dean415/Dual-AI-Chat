@@ -1,6 +1,6 @@
 import { ApiProviderConfig, RoleParameters } from '../types';
 import { generateResponse as generateGeminiResponse } from './geminiService';
-import { generateOpenAiResponse } from './openaiService';
+import { generateOpenAiResponse, generateOpenAiChat, OpenAiChatMessage } from './openaiService';
 
 export type TestConnectionResult = { ok: boolean; latencyMs: number; message?: string };
 
@@ -111,6 +111,30 @@ export async function callModel(args: {
     systemPrompt,
     imageApiPart,
     undefined,
+    parameters
+  );
+  const code = mapErrorToCode(res.error);
+  return { text: res.text, durationMs: res.durationMs, errorCode: code, errorMessage: res.error ? res.text : undefined };
+}
+
+// New: messages-based model call (OpenAI-compatible only)
+export async function callModelWithMessages(args: {
+  provider: ApiProviderConfig;
+  modelId: string;
+  messages: OpenAiChatMessage[];
+  parameters?: RoleParameters;
+}): Promise<{ text: string; durationMs: number; errorCode?: ProviderErrorCode; errorMessage?: string }>
+{
+  const { provider, modelId, messages, parameters } = args;
+  if (provider.providerType !== 'openai') {
+    // Non-OpenAI providers are not supported in messages-based path for MVP
+    return { text: 'Only OpenAI-compatible providers support messages-based workflow in this version.', durationMs: 0, errorCode: 'INVALID_REQUEST', errorMessage: 'unsupported provider' };
+  }
+  const res = await generateOpenAiChat(
+    messages,
+    modelId,
+    provider.apiKey || '',
+    (provider.baseUrl || '').replace(/\/$/, ''),
     parameters
   );
   const code = mapErrorToCode(res.error);

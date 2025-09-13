@@ -11,11 +11,11 @@ interface Props {
 const order: MoaStepId[] = ['stage1A', 'stage1B', 'stage2C', 'stage2D'];
 
 const MoaBubble: React.FC<Props> = ({ steps, preset, providersById }) => {
-  const metaByStep: Record<MoaStepId, { title?: string; brand?: string }> = preset && providersById ? {
-    stage1A: { title: preset.stage1A.modelId || preset.stage1A.displayName, brand: providersById[preset.stage1A.providerId]?.brandKey },
-    stage1B: { title: preset.stage1B.modelId || preset.stage1B.displayName, brand: providersById[preset.stage1B.providerId]?.brandKey },
-    stage2C: { title: preset.stage2C.modelId || preset.stage2C.displayName, brand: providersById[preset.stage2C.providerId]?.brandKey },
-    stage2D: { title: preset.stage2D.modelId || preset.stage2D.displayName, brand: providersById[preset.stage2D.providerId]?.brandKey },
+  const metaByStep: Record<MoaStepId, { title?: string; brand?: string; iconUrl?: string }> = preset && providersById ? {
+    stage1A: { title: preset.stage1A.displayName, brand: providersById[preset.stage1A.providerId]?.brandKey, iconUrl: providersById[preset.stage1A.providerId]?.brandIconUrl },
+    stage1B: { title: preset.stage1B.displayName, brand: providersById[preset.stage1B.providerId]?.brandKey, iconUrl: providersById[preset.stage1B.providerId]?.brandIconUrl },
+    stage2C: { title: preset.stage2C.displayName, brand: providersById[preset.stage2C.providerId]?.brandKey, iconUrl: providersById[preset.stage2C.providerId]?.brandIconUrl },
+    stage2D: { title: preset.stage2D.displayName, brand: providersById[preset.stage2D.providerId]?.brandKey, iconUrl: providersById[preset.stage2D.providerId]?.brandIconUrl },
   } as any : ({} as any);
   return (
     <div className="mb-4 p-3 max-w-2xl mr-auto">
@@ -32,6 +32,7 @@ const MoaBubble: React.FC<Props> = ({ steps, preset, providersById }) => {
             step={steps[k]}
             titleText={metaByStep[k]?.title}
             brand={metaByStep[k]?.brand as any}
+            iconUrl={metaByStep[k]?.iconUrl}
           />
         ))}
       </div>

@@ -7,7 +7,8 @@ import ChatInput from './components/ChatInput';
 import MessageBubble from './components/MessageBubble';
 import Notepad from './components/Notepad';
 import SettingsModal from './components/SettingsModal';
-import TeamManagementModal from './components/TeamManagementModal';
+// TeamManagementModal removed from UI in favor of RoleLibrary/Workflow
+import RoleLibraryModal from './components/RoleLibraryModal';
 import {
   MODELS,
   DEFAULT_COGNITO_MODEL_API_NAME, 
@@ -42,6 +43,13 @@ import { useMoeLogic } from './hooks/useMoeLogic';
 import type { MoeTeamPreset, TeamPreset, ApiProviderConfig } from './types';
 import MoaBubble from './components/MoaBubble';
 import LeftToolbar from './components/LeftToolbar';
+import WorkflowEditorModal from './components/WorkflowEditorModal';
+import { subscribeWorkflowStore } from './utils/workflowStore';
+import useWorkflowOrchestrator from './hooks/useWorkflowOrchestrator';
+import WorkflowBubble from './components/WorkflowBubble';
+import { getRoleLibrary, getWorkflowPresets, getActiveWorkflowId, appendTranscript, getTranscript as wfGetTranscript, setTranscript as wfSetTranscript } from './utils/workflowStore';
+import type { WorkflowPresetMinimal } from './types';
+import type { WorkflowRoundView, WorkflowStepView } from './components/WorkflowBubble';
 
 const DEFAULT_CHAT_PANEL_PERCENT = 60; 
 const FONT_SIZE_STORAGE_KEY = 'dualAiChatFontSizeScale';
@@ -58,9 +66,17 @@ interface ApiKeyStatus {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [moeRunHistory, setMoeRunHistory] = useState<Array<{ id: string; steps: Record<MoaStepId, MoaStepResult>; startedAt: number; anchorMessageId: string }>>([]);
   const [currentMoeEvent, setCurrentMoeEvent] = useState<{ runId: string; startedAt: number; anchorMessageId: string } | null>(null);
+  const [currentWorkflowEvent, setCurrentWorkflowEvent] = useState<{ runId: string; startedAt: number; anchorMessageId: string; rounds: WorkflowRoundView[]; name: string } | null>(null);
+  const [workflowRunHistory, setWorkflowRunHistory] = useState<Array<{ id: string; rounds: WorkflowRoundView[]; startedAt: number; anchorMessageId: string; name: string }>>([]);
   const { state: appState } = useAppStore();
   const hideLegacyModelSelectors = !!(appState && appState.activeTeamId);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState<boolean>(false);
+  const [isRoleLibraryOpen, setIsRoleLibraryOpen] = useState<boolean>(false);
+  const [isWorkflowEditorOpen, setIsWorkflowEditorOpen] = useState<boolean>(false);
+  const [workflowStoreVersion, setWorkflowStoreVersion] = useState<number>(0);
+  const WORKFLOW_DEBUG_STORAGE_KEY = 'dualAiChatWorkflowDebug';
+  const [showWorkflowDebug, setShowWorkflowDebug] = useState<boolean>(() => {
+    try { const v = localStorage.getItem(WORKFLOW_DEBUG_STORAGE_KEY); return v ? v === 'true' : false; } catch { return false; }
+  });
   
   // Gemini Custom API Config State
   const [useCustomApiConfig, setUseCustomApiConfig] = useState<boolean>(() => {
@@ -274,6 +290,10 @@ interface ApiKeyStatus {
     localStorage.setItem(FONT_SIZE_STORAGE_KEY, fontSizeScale.toString());
   }, [fontSizeScale]);
 
+  useEffect(() => {
+    try { localStorage.setItem(WORKFLOW_DEBUG_STORAGE_KEY, showWorkflowDebug ? 'true' : 'false'); } catch {}
+  }, [showWorkflowDebug]);
+
   const isEffectivelyApiKeyMissing = useMemo(() => {
     if (useOpenAiApiConfig) {
       return !openAiApiBaseUrl.trim() || !openAiCognitoModelId.trim() || !openAiMuseModelId.trim();
@@ -288,6 +308,8 @@ interface ApiKeyStatus {
     setMessages([]);
     setMoeRunHistory([]);
     setCurrentMoeEvent(null);
+    setWorkflowRunHistory([]);
+    setCurrentWorkflowEvent(null);
     setMoeRunHistory([]);
     clearNotepadContent();
     setIsNotepadFullscreen(false); 
@@ -375,8 +397,12 @@ interface ApiKeyStatus {
 
   const Separator = () => <div className="h-6 w-px bg-gray-300 mx-1 md:mx-1.5" aria-hidden="true"></div>;
 
-  const openTeamModal = useCallback(() => setIsTeamModalOpen(true), []);
-  const closeTeamModal = useCallback(() => setIsTeamModalOpen(false), []);
+  const [roleEditorPreselectName, setRoleEditorPreselectName] = useState<string | null>(null);
+  const openTeamModal = useCallback(() => setIsRoleLibraryOpen(true), []);
+  const openRoleEditorForName = useCallback((name?: string) => { setRoleEditorPreselectName(name || null); setIsRoleLibraryOpen(true); }, []);
+  const closeTeamModal = useCallback(() => { setIsRoleLibraryOpen(false); setRoleEditorPreselectName(null); }, []);
+  const openWorkflowModal = useCallback(() => setIsWorkflowEditorOpen(true), []);
+  const closeWorkflowModal = useCallback(() => setIsWorkflowEditorOpen(false), []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (chatContainerRef.current) {
@@ -433,6 +459,24 @@ interface ApiKeyStatus {
     return map;
   }, [appState.apiProviders]);
 
+  // Keep active workflow reactive to editor changes
+  useEffect(() => {
+    const unsubscribe = subscribeWorkflowStore(() => setWorkflowStoreVersion(v => v + 1));
+    return () => { try { unsubscribe(); } catch {} };
+  }, []);
+
+  const activeWorkflow: WorkflowPresetMinimal | null = useMemo(() => {
+    try {
+      const presets = getWorkflowPresets();
+      const activeId = getActiveWorkflowId();
+      if (activeId) return presets.find(p => p.id === activeId) || null;
+      const byFlag = presets.find(p => p.isActive);
+      return byFlag || null;
+    } catch {
+      return null;
+    }
+  }, [workflowStoreVersion]);
+
   const defaultMoePreset: MoeTeamPreset = useMemo(() => ({
     id: 'default-moe',
     name: 'Default MoE',
@@ -469,7 +513,94 @@ interface ApiKeyStatus {
     }
   }, [useCustomApiConfig, useOpenAiApiConfig, activeTeam, resetMoeMemory]);
 
+  // Custom Workflow Orchestrator wiring
+  const { isRunning: isWorkflowRunning, runWorkflow, stop: stopWorkflow } = useWorkflowOrchestrator({
+    providers: appState.apiProviders,
+    roleLibrary: getRoleLibrary(),
+    workflow: activeWorkflow,
+    getTranscript: () => wfGetTranscript(),
+    setTranscript: (t) => wfSetTranscript(t),
+    getFinalNotepadContent: () => notepadContent,
+    onRoleOutput: (evt) => {
+      setCurrentWorkflowEvent(prev => {
+        if (!prev) return prev;
+        const next = { ...prev, rounds: prev.rounds.map(r => ({ steps: r.steps.map(s => ({ ...s })) })) } as typeof prev;
+        const round = next.rounds[evt.roundIndex];
+        if (round) {
+          const idx = round.steps.findIndex((s: any) => s.roleName === evt.roleName);
+          if (idx >= 0) {
+            if (evt.errorCode) {
+              (round.steps[idx] as any).status = 'error';
+              (round.steps[idx] as any).error = evt.errorMessage || String(evt.errorCode);
+            } else {
+              const text = evt.text || '';
+              const parsed = parseAIResponse(text);
+              processNotepadUpdateFromAI(parsed, MessageSender.System, addMessage);
+              (round.steps[idx] as any).status = 'done';
+              (round.steps[idx] as any).content = parsed.spokenText || text;
+              try {
+                const role = getRoleLibrary().find(r => r.name === evt.roleName);
+                if (role) {
+                  const prov = appState.apiProviders.find(p => p.id === role.providerId);
+                  if (prov) {
+                    (round.steps[idx] as any).brand = prov.brandKey as any;
+                    (round.steps[idx] as any).iconUrl = prov.brandIconUrl;
+                  }
+                  // Show the role name instead of model id on the card
+                  (round.steps[idx] as any).titleText = evt.roleName;
+                }
+              } catch {}
+            }
+          }
+        }
+        return next;
+      });
+    },
+    onRoleMessagesPreview: ({ roundIndex, roleName, preview }) => {
+      setCurrentWorkflowEvent(prev => {
+        if (!prev) return prev;
+        const next = { ...prev, rounds: prev.rounds.map(r => ({ steps: r.steps.map(s => ({ ...s })) })) } as typeof prev;
+        const round = next.rounds[roundIndex];
+        if (!round) return next;
+        const idx = round.steps.findIndex((s: any) => s.roleName === roleName);
+        if (idx >= 0) {
+          (round.steps[idx] as any).debugPreview = preview;
+        }
+        return next;
+      });
+    }
+  });
+
   const onSendMessageUnified = useCallback(async (message: string, imageFile?: File | null) => {
+    // If custom workflow is active, run it and bypass legacy flows
+    if (activeWorkflow && activeWorkflow.rounds && activeWorkflow.rounds.length > 0) {
+      // Archive previous workflow bubble before starting a new run to preserve 1:1 chat layout
+      setWorkflowRunHistory(prev => (currentWorkflowEvent ? [...prev, { id: currentWorkflowEvent.runId, rounds: currentWorkflowEvent.rounds, startedAt: currentWorkflowEvent.startedAt, anchorMessageId: currentWorkflowEvent.anchorMessageId, name: currentWorkflowEvent.name }] : prev));
+      appendTranscript({ role: 'user', content: message, at: Date.now() });
+      let userMsgId = '';
+      flushSync(() => {
+        userMsgId = addMessage(message, MessageSender.User, MessagePurpose.UserInput);
+      });
+      const lib = getRoleLibrary();
+      const libByName = lib.reduce((acc, it) => { acc[it.name] = it; return acc; }, {} as Record<string, any>);
+      const rounds = (activeWorkflow.rounds || []).map(r => ({
+        steps: (r.roles || []).slice(0, 4).map((roleName: string) => {
+          const roleCfg = libByName[roleName];
+          const prov = roleCfg ? providersById[roleCfg.providerId] : undefined;
+          return {
+            roleName,
+            status: 'thinking',
+            titleText: roleName,
+            brand: prov?.brandKey as any,
+            iconUrl: prov?.brandIconUrl,
+          };
+        })
+      })) as any;
+      const newRunId = generateUniqueId();
+      setCurrentWorkflowEvent({ runId: newRunId, startedAt: Date.now(), anchorMessageId: userMsgId, rounds, name: activeWorkflow.name || 'Workflow' });
+      runWorkflow(message);
+      return;
+    }
     if (activeTeam && activeTeam.mode === 'moe') {
       // Before starting a new MoE run, snapshot previous run (if any final results exist)
       try {
@@ -504,11 +635,17 @@ interface ApiKeyStatus {
       return;
     }
     startChatProcessing(message, imageFile || undefined);
-  }, [activeTeam, startMoeProcessing, startChatProcessing, addMessage, stepsState, isMoeRunning, setMoeRunHistory, currentMoeEvent]);
+  }, [activeWorkflow, workflowStoreVersion, activeTeam, startMoeProcessing, startChatProcessing, addMessage, stepsState, isMoeRunning, setMoeRunHistory, currentMoeEvent, currentWorkflowEvent, setWorkflowRunHistory, providersById]);
 
-  const uiIsLoading = activeTeam && activeTeam.mode === 'moe' ? isMoeRunning : isLoading;
+  const uiIsLoading = activeWorkflow ? isWorkflowRunning : (activeTeam && activeTeam.mode === 'moe' ? isMoeRunning : isLoading);
 
   const handleStopGeneratingUnified = useCallback(() => {
+    if (activeWorkflow) {
+      stopWorkflow();
+      setCurrentWorkflowEvent(null);
+      addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
+      return;
+    }
     if (activeTeam && activeTeam.mode === 'moe') {
       // Stop MoE pipeline and immediately hide the live MoE bubble
       stopMoeGenerating();
@@ -522,7 +659,7 @@ interface ApiKeyStatus {
       prunePendingSystemPlaceholders();
       addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
     }
-  }, [activeTeam, stopMoeGenerating, stopChatLogicGeneration, prunePendingSystemPlaceholders, removeLatestAiBubble, addMessage, setCurrentMoeEvent]);
+  }, [activeWorkflow, stopWorkflow, activeTeam, stopMoeGenerating, stopChatLogicGeneration, prunePendingSystemPlaceholders, removeLatestAiBubble, addMessage, setCurrentMoeEvent]);
 
   const showMoeBubble = useMemo(() => {
     if (!(activeTeam && activeTeam.mode === 'moe')) return false;
@@ -563,8 +700,8 @@ interface ApiKeyStatus {
     <>
       <LeftToolbar
         onOpenTeam={openTeamModal}
+        onOpenWorkflow={openWorkflowModal}
         onOpenSettings={openSettingsModal}
-        onClearChat={handleClearChat}
         disabled={uiIsLoading}
       />
       <div className={`flex flex-col h-screen bg-white shadow-2xl overflow-hidden ${isNotepadFullscreen ? 'fixed inset-0 z-40' : 'relative'} pl-12 md:pl-14`}>
@@ -658,16 +795,28 @@ interface ApiKeyStatus {
                 {
                   // Build interleaved timeline by timestamp
                   (() => {
-                    type Item = { type: 'msg'; time: number; key: string; msg: ChatMessage } | { type: 'moe'; time: number; key: string; steps: Record<MoaStepId, MoaStepResult> };
+                    type Item =
+                      | { type: 'msg'; time: number; key: string; msg: ChatMessage }
+                      | { type: 'moe'; time: number; key: string; steps: Record<MoaStepId, MoaStepResult> }
+                      | { type: 'workflow'; time: number; key: string; rounds: any; title?: string };
                     const items: Item[] = [];
                     for (const m of messages) {
                       items.push({ type: 'msg', time: (m.timestamp instanceof Date ? m.timestamp.getTime() : new Date(m.timestamp as any).getTime()), key: `msg-${m.id}` , msg: m });
                     }
-                    for (const run of moeRunHistory) {
-                      items.push({ type: 'moe', time: run.startedAt, key: `moe-hist-${run.id}`, steps: run.steps });
+                    if (!activeWorkflow) {
+                      for (const run of moeRunHistory) {
+                        items.push({ type: 'moe', time: run.startedAt, key: `moe-hist-${run.id}`, steps: run.steps });
+                      }
+                      if (currentMoeEvent && showMoeBubble) {
+                        items.push({ type: 'moe', time: currentMoeEvent.startedAt, key: `moe-live-${currentMoeEvent.runId}`, steps: stepsState as Record<MoaStepId, MoaStepResult> });
+                      }
                     }
-                    if (currentMoeEvent && showMoeBubble) {
-                      items.push({ type: 'moe', time: currentMoeEvent.startedAt, key: `moe-live-${currentMoeEvent.runId}`, steps: stepsState as Record<MoaStepId, MoaStepResult> });
+                    if (currentWorkflowEvent) {
+                      items.push({ type: 'workflow', time: currentWorkflowEvent.startedAt, key: `wf-live-${currentWorkflowEvent.runId}`, rounds: currentWorkflowEvent.rounds, title: currentWorkflowEvent.name });
+                    }
+                    // Include workflow history runs (archived)
+                    for (const run of workflowRunHistory) {
+                      items.push({ type: 'workflow', time: run.startedAt, key: `wf-hist-${run.id}`, rounds: run.rounds, title: run.name });
                     }
                     items.sort((a, b) => a.time - b.time);
                     return items.map(it => {
@@ -682,7 +831,9 @@ interface ApiKeyStatus {
                           />
                         );
                       }
-                      return <MoaBubble key={it.key} steps={it.steps} />;
+                      if (it.type === 'moe') return <MoaBubble key={it.key} steps={it.steps} preset={moePreset} providersById={providersById} />;
+                      if (it.type === 'workflow') return <WorkflowBubble key={it.key} rounds={it.rounds} title={it.title} showDebug={showWorkflowDebug} />;
+                      return null;
                     });
                   })()
                 }
@@ -731,6 +882,7 @@ interface ApiKeyStatus {
             isLoading={uiIsLoading} 
             isNotepadFullscreen={isNotepadFullscreen}
             onToggleFullscreen={toggleNotepadFullscreen}
+            onClearChat={handleClearChat}
             onEdit={applyUserEdit}
             onUndo={undoNotepad}
             onRedo={redoNotepad}
@@ -751,6 +903,8 @@ interface ApiKeyStatus {
         <SettingsModal
           isOpen={isSettingsModalOpen}
           onClose={closeSettingsModal}
+          onOpenRoleLibrary={openTeamModal}
+          onOpenWorkflowEditor={openWorkflowModal}
           discussionMode={discussionMode}
           onDiscussionModeChange={(mode) => setDiscussionMode(mode)}
           manualFixedTurns={manualFixedTurns}
@@ -774,6 +928,8 @@ interface ApiKeyStatus {
           isLoading={isLoading}
           fontSizeScale={fontSizeScale}
           onFontSizeScaleChange={setFontSizeScale}
+          showWorkflowDebug={showWorkflowDebug}
+          onWorkflowDebugToggle={() => setShowWorkflowDebug(prev => !prev)}
           // Gemini Custom API Props
           useCustomApiConfig={useCustomApiConfig}
           onUseCustomApiConfigChange={handleUseCustomGeminiApiConfigChange}
@@ -794,8 +950,11 @@ interface ApiKeyStatus {
           onOpenAiMuseModelIdChange={(e) => setOpenAiMuseModelId(e.target.value)}
         />
       )}
-      {isTeamModalOpen && (
-        <TeamManagementModal isOpen={isTeamModalOpen} onClose={closeTeamModal} />
+      {isRoleLibraryOpen && (
+        <RoleLibraryModal isOpen={isRoleLibraryOpen} onClose={closeTeamModal} initialSelectedName={roleEditorPreselectName || undefined} />
+      )}
+      {isWorkflowEditorOpen && (
+        <WorkflowEditorModal isOpen={isWorkflowEditorOpen} onClose={closeWorkflowModal} />
       )}
       </div>
     </>

@@ -26,9 +26,14 @@ export const STORAGE_KEYS = {
   apiProviders: 'dualAiChat.apiProviders',
   teamPresets: 'dualAiChat.teamPresets',
   activeTeamId: 'dualAiChat.activeTeamId',
+  // New keys for custom workflow
+  roleLibrary: 'dualAiChat.roleLibrary',
+  workflowPresets: 'dualAiChat.workflowPresets',
+  activeWorkflowId: 'dualAiChat.activeWorkflowId',
+  transcript: 'dualAiChat.transcript',
 } as const;
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // Throttled localStorage writes
 type SaveQueueItem = { key: string; value: any };
@@ -77,6 +82,25 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     const apiProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
     const teamPresets = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
     const activeTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, teamPresets[0]?.id || null) || (teamPresets[0]?.id ?? '');
+    // Ensure new keys exist with sane defaults (idempotent)
+    try { if (localStorage.getItem(STORAGE_KEYS.roleLibrary) === null) save(STORAGE_KEYS.roleLibrary, []); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.workflowPresets) === null) save(STORAGE_KEYS.workflowPresets, []); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.activeWorkflowId) === null) save(STORAGE_KEYS.activeWorkflowId, ''); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.transcript) === null) save(STORAGE_KEYS.transcript, []); } catch {}
+    return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
+  }
+
+  // Upgrade path: v2 -> v3 (introduce roleLibrary/workflowPresets/transcript)
+  if (existingVersion === 2) {
+    const apiProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
+    const teamPresets = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
+    const activeTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, teamPresets[0]?.id || null) || (teamPresets[0]?.id ?? '');
+    // Initialize new keys
+    save(STORAGE_KEYS.roleLibrary, load(STORAGE_KEYS.roleLibrary, [] as any[]));
+    save(STORAGE_KEYS.workflowPresets, load(STORAGE_KEYS.workflowPresets, [] as any[]));
+    save(STORAGE_KEYS.activeWorkflowId, load(STORAGE_KEYS.activeWorkflowId, ''));
+    save(STORAGE_KEYS.transcript, load(STORAGE_KEYS.transcript, [] as any[]));
+    save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
     return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
   }
 
@@ -90,6 +114,11 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
       brandKey: (p.brandKey || ((p.providerType === 'openai') ? 'gpt' : (p.providerType === 'gemini') ? 'gemini' : 'generic')) as BrandKey,
     }));
     save(STORAGE_KEYS.apiProviders, withBrand);
+    // Initialize new keys
+    save(STORAGE_KEYS.roleLibrary, load(STORAGE_KEYS.roleLibrary, [] as any[]));
+    save(STORAGE_KEYS.workflowPresets, load(STORAGE_KEYS.workflowPresets, [] as any[]));
+    save(STORAGE_KEYS.activeWorkflowId, load(STORAGE_KEYS.activeWorkflowId, ''));
+    save(STORAGE_KEYS.transcript, load(STORAGE_KEYS.transcript, [] as any[]));
     save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
     return { apiProviders: withBrand, teamPresets: loadedTeams, activeTeamId: loadedActiveTeamId, schemaVersion: SCHEMA_VERSION };
   }
@@ -190,6 +219,11 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
   save(STORAGE_KEYS.apiProviders, providers);
   save(STORAGE_KEYS.teamPresets, teamPresets);
   save(STORAGE_KEYS.activeTeamId, defaultTeamId);
+  // Initialize new keys for custom workflow
+  save(STORAGE_KEYS.roleLibrary, load(STORAGE_KEYS.roleLibrary, [] as any[]));
+  save(STORAGE_KEYS.workflowPresets, load(STORAGE_KEYS.workflowPresets, [] as any[]));
+  save(STORAGE_KEYS.activeWorkflowId, load(STORAGE_KEYS.activeWorkflowId, ''));
+  save(STORAGE_KEYS.transcript, load(STORAGE_KEYS.transcript, [] as any[]));
   save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
 
   return {

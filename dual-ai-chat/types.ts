@@ -147,3 +147,40 @@ export interface MoaStepResult {
   content?: string; // markdown content on success
   error?: string;   // error text on failure
 }
+
+// ====== New minimal types for Custom Workflow (Role Library + Workflow) ======
+
+// Role library item (reusable role config without user template)
+export interface RoleLibraryItem {
+  id: string;
+  name: string;             // display name (unique by your convention)
+  providerId: string;       // references ApiProviderConfig.id
+  modelId: string;          // model identifier for the provider
+  systemPrompt?: string;    // optional system instruction
+  parameters?: RoleParameters; // optional toggled parameters
+}
+
+// Transcript message for future history-N (global memory)
+export type TranscriptMessage =
+  | { role: 'user'; content: string; at: number }
+  | { role: 'assistant_notepad'; content: string; at: number };
+
+// History N options for per-role config
+export type HistoryN = 0 | 2 | 4 | 6 | 8;
+
+export interface WorkflowRoundPerRoleOptions {
+  historyN: HistoryN;        // Disabled=0 or 2/4/6/8
+  receiveFrom: string[];     // role names from previous rounds (UI order)
+}
+
+export interface WorkflowRound {
+  roles: string[]; // role names in this round (1..4)
+  perRole: Record<string, WorkflowRoundPerRoleOptions>;
+}
+
+export interface WorkflowPresetMinimal {
+  id: string;
+  name: string;
+  isActive?: boolean; // only one active at a time
+  rounds: WorkflowRound[];
+}

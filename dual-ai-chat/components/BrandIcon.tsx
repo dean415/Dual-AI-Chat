@@ -15,7 +15,20 @@ const BrandIcon: React.FC<BrandIconProps> = ({ brand = 'generic', size = 16, cla
 
   // If a custom icon URL is provided, prefer it
   if (src) {
-    return <img src={src} width={s} height={s} className={className} alt={title || 'brand'} style={{ objectFit: 'contain', display: 'inline-block' }} />;
+    // Use a fixed-size square wrapper to avoid distortion for non-square bitmaps.
+    return (
+      <span
+        className={className}
+        style={{ width: s, height: s, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        aria-label={title || 'brand'}
+      >
+        <img
+          src={src}
+          alt={title || 'brand'}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 0, display: 'block' }}
+        />
+      </span>
+    );
   }
 
   if (brand === 'gemini') {

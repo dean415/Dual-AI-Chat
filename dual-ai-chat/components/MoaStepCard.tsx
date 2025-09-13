@@ -14,21 +14,24 @@ interface Props {
   step: MoaStepResult;
   titleText?: string;
   brand?: BrandKey;
+  iconUrl?: string; // optional custom provider icon
+  showDebug?: boolean;
+  debugPreview?: Array<{ role: string; name?: string; content: string }>;
 }
 
-const MoaStepCard: React.FC<Props> = ({ step, titleText, brand }) => {
+const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDebug, debugPreview }) => {
   // Fallback: derive brand/title from active team + providers if not provided
   const { state } = useAppStore();
-  let providerIconUrl: string | undefined;
+  let providerIconUrl: string | undefined = iconUrl;
   if (!titleText || !brand) {
     const activeTeam: TeamPreset | undefined = state.teamPresets.find(t => t.id === state.activeTeamId);
     if (activeTeam && activeTeam.mode === 'moe') {
       const moe = activeTeam as any;
       const role = step.stepId === 'stage1A' ? moe.stage1A : step.stepId === 'stage1B' ? moe.stage1B : step.stepId === 'stage2C' ? moe.stage2C : moe.stage2D;
-      titleText = titleText || role?.modelId || role?.displayName;
+      titleText = titleText || role?.displayName || role?.modelId;
       const p = state.apiProviders.find(x => x.id === role?.providerId);
       brand = brand || (p && (p.brandKey as BrandKey));
-      providerIconUrl = p?.brandIconUrl;
+      providerIconUrl = providerIconUrl || p?.brandIconUrl;
     }
   }
   const [open, setOpen] = useState(true);
@@ -56,6 +59,14 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand }) => {
       body = <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">{step.content}</pre>;
     }
   }
+  const [debugOpen, setDebugOpen] = useState(false);
+  const minifyPreview = (arr?: Array<{ role: string; name?: string; content: string }>) => {
+    if (!arr || arr.length === 0) return '';
+    const items = arr.map(m => ({ role: m.role, ...(m.name ? { name: m.name } : {}), content: m.content }));
+    return JSON.stringify(items);
+  };
+  const singleLine = minifyPreview(debugPreview);
+
   return (
     <div className="border rounded-[14px] border-[#E6E8EB]">
       <button
@@ -69,10 +80,29 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand }) => {
           <BrandIcon brand={brand} src={providerIconUrl} size={brandSize} />
           <span className="ml-0.5 text-[20px] serif-text">{titleText || step.displayName}</span>
         </div>
-        <div className="rounded-full bg-[#F1F3F5] flex items-center justify-center" style={{ width: 24, height: 24 }}>
-          <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-0' : '-rotate-90'}`} />
+        <div className="flex items-center gap-3">
+          {showDebug && singleLine && (
+            <button
+              type="button"
+              onClick={(e)=>{ e.stopPropagation(); setDebugOpen(v=>!v); }}
+              title="Debug"
+              className="text-xs text-gray-400 hover:text-gray-600 font-mono"
+            >
+              Debug: {singleLine}
+            </button>
+          )}
+          <div className="rounded-full bg-[#F1F3F5] flex items-center justify-center" style={{ width: 24, height: 24 }}>
+            <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-0' : '-rotate-90'}`} />
+          </div>
         </div>
       </button>
+      {debugOpen && showDebug && singleLine && (
+        <div className="px-4 pt-1 pb-2 bg-white border-t border-gray-100">
+          <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">---
+{JSON.stringify(debugPreview, null, 2)}
+---</pre>
+        </div>
+      )}
       {open && <div className="p-2 bg-white">{body}</div>}
     </div>
   );
