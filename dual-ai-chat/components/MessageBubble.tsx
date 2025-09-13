@@ -124,6 +124,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, f
     }
   }
 
+  // Special minimal rendering for cancelled messages
+  if (purpose === MessagePurpose.Cancelled) {
+    return (
+      <div className="flex justify-start">
+        <div className="mb-4 inline-block max-w-[70%] mr-auto rounded-[14px] px-4 py-2 bg-gray-50 text-gray-400 shadow-none border border-gray-200">
+          <p className="text-sm italic">{messageText || 'Cancel Request'}</p>
+        </div>
+      </div>
+    );
+  }
+
   const handleCopy = async () => {
     const prefix = getPurposePrefix(purpose, sender);
     const textToCopy = prefix + messageText;

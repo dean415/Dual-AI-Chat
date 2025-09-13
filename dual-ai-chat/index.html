@@ -17,6 +17,10 @@
       --font-cjk: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Heiti SC", "WenQuanYi Micro Hei";
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
+      /* Serif stacks for requested areas */
+      --font-latin-serif: "Georgia", "Times New Roman", "Palatino Linotype", "Book Antiqua", "Palatino", serif;
+      --font-cjk-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", "Source Han Serif SC", serif;
+
       /* Type scale (relative to html root size which you already scale) */
       --fs-body: 1.25rem;   /* ~17–18px at default */
       --lh-body: 1.6;       /* comfortable multi-language line height */
@@ -62,6 +66,14 @@
       font-family: var(--font-cjk), var(--font-latin), sans-serif;
       letter-spacing: 0.01em; /* slightly looser for Han characters */
     }
+
+    /* Utility: force serif for specific UI sections */
+    .serif-text { font-family: var(--font-latin-serif), var(--font-cjk-serif), serif; }
+    .serif-text:lang(zh),
+    .serif-text:lang(zh-CN),
+    .serif-text:lang(zh-SG),
+    .serif-text:lang(zh-HK),
+    .serif-text:lang(zh-TW) { font-family: var(--font-cjk-serif), var(--font-latin-serif), serif; }
 
     /* Global heading rhythm (outside markdown) */
     h1 { font-size: var(--fs-h1); line-height: var(--lh-heading); font-weight: var(--weight-heading); }
@@ -264,6 +276,109 @@
     /* Hide scrollbars visually but keep scrolling for opted-in elements */
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; background: transparent; }
+
+    /* ===== Mixture-of-Agents: Two Dots Loading Spinner ===== */
+    .moa-two-dots {
+      --moa-dot-size: 8px;          /* default diameter */
+      --moa-gap: 6px;               /* space between dots */
+      --moa-duration: 1s;           /* full alternation period */
+      display: inline-flex;
+      align-items: center;
+      gap: var(--moa-gap);
+      line-height: 0;               /* vertical alignment for tight layout */
+    }
+    .moa-two-dots .moa-dot {
+      width: var(--moa-dot-size);
+      height: var(--moa-dot-size);
+      border-radius: 9999px;
+      background-color: #AECBFA; /* initial light blue */
+      will-change: transform, background-color;
+      animation: moaTwoDotsPulse var(--moa-duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      transform-origin: center;
+    }
+    .moa-two-dots .moa-dot.second {
+      /* offset by half a cycle so the two dots alternate */
+      animation-delay: calc(var(--moa-duration) / 2);
+    }
+
+    @keyframes moaTwoDotsPulse {
+      0% {
+        transform: scale(1.15);
+        background-color: #4285F4; /* Google blue */
+      }
+      25% {
+        transform: scale(1.00);
+        background-color: #78A8F7; /* mid blue (inferred) */
+      }
+      50% {
+        transform: scale(0.85);
+        background-color: #AECBFA; /* light blue */
+      }
+      75% {
+        transform: scale(1.00);
+        background-color: #78A8F7; /* mid blue */
+      }
+      100% {
+        transform: scale(1.15);
+        background-color: #4285F4; /* Google blue */
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .moa-two-dots .moa-dot { animation: none; }
+    }
+
+    /* ===== Thinking… Shimmer + Caret ===== */
+    .thinking-shimmer-text {
+      position: relative;
+      display: inline-block;
+      /* Use current text color for base, white for highlight */
+      background-image: linear-gradient(
+        90deg,
+        currentColor 0%,
+        currentColor 40%,
+        rgba(255, 255, 255, 0.98) 50%,
+        currentColor 60%,
+        currentColor 100%
+      );
+      background-size: 200% 100%;
+      background-position: -20% 0; /* start just left of the first letter */
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      /* After ~1s delay (≈ 3 cursor cycles), start scanning */
+      animation: thinkingShimmerScan 2.6s ease-in-out 1s infinite alternate;
+    }
+    @keyframes thinkingShimmerScan {
+      0% { background-position: -20% 0; }
+      100% { background-position: 120% 0; }
+    }
+
+    .thinking-caret {
+      display: inline-block;
+      width: 0.5em;
+      height: 0.85em;
+      margin-left: 0.18em;
+      background-color: #000; /* starts black */
+      animation: thinkingCaretBlink 0.333s ease-in-out infinite;
+      vertical-align: -0.06em; /* align with text baseline */
+    }
+    @keyframes thinkingCaretBlink {
+      0%   { background-color: #000; }
+      50%  { background-color: #fff; }
+      100% { background-color: #000; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .thinking-shimmer-text {
+        animation: none;
+        background: none;
+        color: currentColor;
+        -webkit-text-fill-color: currentColor;
+      }
+      .thinking-caret { animation: none; }
+    }
   </style>
 <script type="importmap">
 {

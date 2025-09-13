@@ -1,4 +1,4 @@
-
+﻿
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
@@ -151,6 +151,43 @@ interface ApiKeyStatus {
       image,
     }]);
     return messageId;
+  }, []);
+
+  // Remove trailing system placeholder bubbles like “正在…/等待…/准备…”，used when cancelling
+  const prunePendingSystemPlaceholders = useCallback(() => {
+    setMessages(prev => {
+      const next = [...prev];
+      let i = next.length - 1;
+      while (i >= 0) {
+        const m = next[i];
+        const isSystemNotice = m.sender === MessageSender.System && m.purpose === MessagePurpose.SystemNotification;
+        const text = (m.text || '').toString();
+        const looksLikePlaceholder = /正在|等待|准备/.test(text);
+        if (isSystemNotice && looksLikePlaceholder) {
+          next.pop();
+          i--;
+          continue;
+        }
+        break;
+      }
+      return next;
+    });
+  }, []);
+
+  // Remove the most recent AI bubble (Cognito/Muse) after the last user message
+  const removeLatestAiBubble = useCallback(() => {
+    setMessages(prev => {
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i--) {
+        const m = next[i];
+        if (m.sender === MessageSender.User) break; // do not cross previous round
+        if ((m.sender === MessageSender.Cognito || m.sender === MessageSender.Muse) && m.purpose !== MessagePurpose.SystemNotification) {
+          next.splice(i, 1);
+          break;
+        }
+      }
+      return next;
+    });
   }, []);
   
   // Determine actual model details based on active API configuration
@@ -313,7 +350,7 @@ interface ApiKeyStatus {
   }, [isLoading, stopChatLogicGeneration, initializeChat]);
 
   const handleStopGeneratingAppLevel = useCallback(() => {
-    // �?MoE 妯″紡涓嬶紝浣跨敤 MoE 鐨勫仠姝紱鍚﹀垯淇濇寔鍘熸湁閫昏緫
+    // 锟?MoE 濡€崇础娑撳绱濇担璺ㄦ暏 MoE 閻ㄥ嫬浠犲顫幢閸氾箑鍨穱婵囧瘮閸樼喐婀侀柅鏄忕帆
     if (activeTeam && activeTeam.mode === 'moe') {
       // will be defined later; placeholder for type
     } else {
@@ -385,7 +422,7 @@ interface ApiKeyStatus {
     return apiKeyStatus.message; 
   }, [apiKeyStatus, useCustomApiConfig, useOpenAiApiConfig]);
 
-  // ===== MoE 鎺ュ叆锛氳�?activeTeam �?hooks =====
+  // ===== MoE 閹恒儱鍙嗛敍姘愁吀锟?activeTeam 锟?hooks =====
   const activeTeam: TeamPreset | undefined = useMemo(() => {
     return appState.teamPresets.find(t => t.id === appState.activeTeamId);
   }, [appState.teamPresets, appState.activeTeamId]);
@@ -420,7 +457,7 @@ interface ApiKeyStatus {
         const parsed = parseAIResponse(sum.content);
         processNotepadUpdateFromAI(parsed, MessageSender.Cognito, addMessage);
       } else if (sum?.errorMessage) {
-        addMessage(`[system] Summarizer failure�?{sum.errorMessage}`, MessageSender.System, MessagePurpose.SystemNotification);
+        addMessage(`[system] Summarizer failure锟?{sum.errorMessage}`, MessageSender.System, MessagePurpose.SystemNotification);
       }
     }
   });
@@ -473,11 +510,19 @@ interface ApiKeyStatus {
 
   const handleStopGeneratingUnified = useCallback(() => {
     if (activeTeam && activeTeam.mode === 'moe') {
+      // Stop MoE pipeline and immediately hide the live MoE bubble
       stopMoeGenerating();
+      setCurrentMoeEvent(null);
+      // Also add a cancel notice for clear feedback
+      addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
     } else {
       stopChatLogicGeneration();
+      // Remove the current AI bubble and placeholders, then add an immediate cancel notice
+      removeLatestAiBubble();
+      prunePendingSystemPlaceholders();
+      addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
     }
-  }, [activeTeam, stopMoeGenerating, stopChatLogicGeneration]);
+  }, [activeTeam, stopMoeGenerating, stopChatLogicGeneration, prunePendingSystemPlaceholders, removeLatestAiBubble, addMessage, setCurrentMoeEvent]);
 
   const showMoeBubble = useMemo(() => {
     if (!(activeTeam && activeTeam.mode === 'moe')) return false;
@@ -531,22 +576,22 @@ interface ApiKeyStatus {
             <>
               {useOpenAiApiConfig ? (
                 <>
-                  <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '鏈寚锟?}`}>
+                  <div className="flex items-center p-1.5 bg-indigo-50 border border-indigo-300 rounded-md" title={`OpenAI Cognito: ${openAiCognitoModelId || '閺堫亝瀵氶敓?}`}>
                     <Brain size={18} className="mr-1.5 text-indigo-600 flex-shrink-0" />
                     <span className="text-sm font-medium text-indigo-700 whitespace-nowrap hidden sm:inline">Cognito:</span>
-                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '鏈寚锟?}</span>
+                    <span className="text-sm font-medium text-indigo-700 whitespace-nowrap ml-1 sm:ml-0">{openAiCognitoModelId || '閺堫亝瀵氶敓?}</span>
                   </div>
                   <Separator />
-                  <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '鏈寚锟?}`}>
+                  <div className="flex items-center p-1.5 bg-purple-50 border border-purple-300 rounded-md" title={`OpenAI Muse: ${openAiMuseModelId || '閺堫亝瀵氶敓?}`}>
                     <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" />
                     <span className="text-sm font-medium text-purple-700 whitespace-nowrap hidden sm:inline">Muse:</span>
-                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '鏈寚锟?}</span>
+                    <span className="text-sm font-medium text-purple-700 whitespace-nowrap ml-1 sm:ml-0">{openAiMuseModelId || '閺堫亝瀵氶敓?}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="flex items-center" title={`Cognito Model: ${actualCognitoModelDetails.name}`}>
-                    <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 妯″�?/label>
+                    <label htmlFor="cognitoModelSelector" className="sr-only">Cognito AI 濡€筹拷?/label>
                     <Brain size={18} className="mr-1.5 text-green-600 flex-shrink-0" aria-hidden="true" />
                     <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Cognito:</span>
                     <select 
@@ -554,14 +599,14 @@ interface ApiKeyStatus {
                       value={selectedCognitoModelApiName} 
                       onChange={(e) => setSelectedCognitoModelApiName(e.target.value)}
                       className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                      aria-label="閫夋嫨Cognito鐨凙I妯″�? 
+                      aria-label="闁瀚–ognito閻ㄥ嚈I濡€筹拷? 
                       disabled={uiIsLoading || useOpenAiApiConfig}>
                       {MODELS.map((model) => (<option key={`cognito-${model.id}`} value={model.apiName}>{model.name}</option>))}
                     </select>
                   </div>
                   <Separator />
                   <div className="flex items-center" title={`Muse Model: ${actualMuseModelDetails.name}`}>
-                    <label htmlFor="museModelSelector" className="sr-only">Muse AI 妯″�?/label>
+                    <label htmlFor="museModelSelector" className="sr-only">Muse AI 濡€筹拷?/label>
                     <Sparkles size={18} className="mr-1.5 text-purple-600 flex-shrink-0" aria-hidden="true" />
                     <span className="text-sm font-medium text-gray-700 mr-1 hidden sm:inline">Muse:</span>
                     <select 
@@ -569,7 +614,7 @@ interface ApiKeyStatus {
                       value={selectedMuseModelApiName} 
                       onChange={(e) => setSelectedMuseModelApiName(e.target.value)}
                       className={`${modelSelectorBaseClass} ${modelSelectorWidthClass}`}
-                      aria-label="閫夋嫨Muse鐨凙I妯″�? 
+                      aria-label="闁瀚∕use閻ㄥ嚈I濡€筹拷? 
                       disabled={uiIsLoading || useOpenAiApiConfig}>
                       {MODELS.map((model) => (<option key={`muse-${model.id}`} value={model.apiName}>{model.name}</option>))}
                     </select>
@@ -581,17 +626,17 @@ interface ApiKeyStatus {
           )}
           <button onClick={openTeamModal}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="鎵撳紑鍥㈤槦绠＄�? title="鎵撳紑鍥㈤槦绠＄�? disabled={uiIsLoading}>
+            aria-label="閹垫挸绱戦崶銏ゆЕ缁狅紕锟? title="閹垫挸绱戦崶銏ゆЕ缁狅紕锟? disabled={uiIsLoading}>
             <Database size={20} />
           </button>
           <button onClick={openSettingsModal}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="鎵撳紑璁剧疆" title="鎵撳紑璁剧疆" disabled={uiIsLoading}>
+            aria-label="閹垫挸绱戠拋鍓х枂" title="閹垫挸绱戠拋鍓х枂" disabled={uiIsLoading}>
             <Settings2 size={20} /> 
           </button>
           <button onClick={handleClearChat}
             className="p-1.5 md:p-2 text-gray-500 hover:text-sky-600 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-gray-50 rounded-md shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
-            aria-label="娓呯┖浼氳瘽" title="娓呯┖浼氳瘽" disabled={uiIsLoading}
+            aria-label="濞撳懐鈹栨导姘崇樈" title="濞撳懐鈹栨导姘崇樈" disabled={uiIsLoading}
             ><RefreshCwIcon size={20} /> 
           </button>
         </div>
@@ -758,4 +803,5 @@ interface ApiKeyStatus {
 };
 
 export default App;
+
 

@@ -1,0 +1,229 @@
+    1: import React, { useState } from 'react';
+    2: import { ChatMessage, MessageSender, MessagePurpose, FailedStepPayload } from '../types';
+    3: import { Lightbulb, MessageSquareText, UserCircle, Zap, AlertTriangle, Copy, Check, RefreshCw } from 'lucide-react';
+    4: import { marked } from 'marked';
+    5: import DOMPurify from 'dompurify';
+    6: 
+    7: interface SenderIconProps {
+    8:   sender: MessageSender;
+    9:   purpose: MessagePurpose;
+   10:   messageText: string;
+   11: }
+   12: 
+   13: const SenderIcon: React.FC<SenderIconProps> = ({ sender, purpose, messageText }) => {
+   14:   const iconClass = "w-5 h-5 mr-2 flex-shrink-0";
+   15:   switch (sender) {
+   16:     case MessageSender.User:
+   17:       return <UserCircle className={`${iconClass} text-blue-500`} />;
+   18:     case MessageSender.Cognito:
+   19:       return <Lightbulb className={`${iconClass} text-green-500`} />;
+   20:     case MessageSender.Muse:
+   21:       return <Zap className={`${iconClass} text-purple-500`} />;
+   22:     case MessageSender.System:
+   23:       if (
+   24:         purpose === MessagePurpose.SystemNotification &&
+   25:         (messageText.toLowerCase().includes("error") ||
+   26:           messageText.toLowerCase().includes("错误") ||
+   27:           messageText.toLowerCase().includes("警告"))
+   28:       ) {
+   29:         return <AlertTriangle className={`${iconClass} text-red-500`} />;
+   30:       }
+   31:       return <MessageSquareText className={`${iconClass} text-gray-500`} />;
+   32:     default:
+   33:       return null;
+   34:   }
+   35: };
+   36: 
+   37: const getSenderNameStyle = (sender: MessageSender): string => {
+   38:   switch (sender) {
+   39:     case MessageSender.User: return "text-blue-600";
+   40:     case MessageSender.Cognito: return "text-green-600";
+   41:     case MessageSender.Muse: return "text-purple-600";
+   42:     case MessageSender.System: return "text-gray-600";
+   43:     default: return "text-gray-700";
+   44:   }
+   45: }
+   46: 
+   47: const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageText: string): string => {
+   48:   let baseStyle = "mb-4 p-4 rounded-lg shadow-md break-words whitespace-pre-wrap overflow-hidden relative border "; 
+   49:   // Neutral, pale gray AI bubble for cancelled replies
+   50:   if (purpose === MessagePurpose.Cancelled) {
+   51:     return "mb-4 inline-block max-w-[70%] mr-auto rounded-[14px] px-4 py-2 bg-gray-50 text-gray-400 shadow-none border border-gray-200";
+   52:   }
+   53:   if (purpose === MessagePurpose.SystemNotification) {
+   54:     if (
+   55:       messageText.toLowerCase().includes("error") ||
+   56:       messageText.toLowerCase().includes("错误") ||
+   57:       messageText.toLowerCase().includes("警告") ||
+   58:       messageText.toLowerCase().includes("critical") ||
+   59:       messageText.toLowerCase().includes("严重") ||
+   60:       messageText.toLowerCase().includes("失败") 
+   61:     ) {
+   62:        return baseStyle + "bg-red-50 border-red-300 text-center text-sm italic mx-auto text-red-700";
+   63:     }
+   64:     return baseStyle + "bg-gray-100 border-gray-300 text-center text-sm italic mx-auto text-gray-600";
+   65:   }
+   66:   switch (sender) {
+   67:     case MessageSender.User:
+   68:       // Compact rectangular bubble with oval corners; prevents circular shape for very short text
+   69:       return "mb-4 inline-block max-w-[70%] ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle";
+   70:     case MessageSender.Cognito:
+   71:       return baseStyle + "max-w-xl bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
+   72:     case MessageSender.Muse:
+   73:       return baseStyle + "max-w-xl bg-purple-50 border-purple-300 text-purple-800 mr-auto rounded-br-none";
+   74:     default:
+   75:       return baseStyle + "max-w-xl bg-white border-gray-300 text-gray-700 mr-auto";
+   76:   }
+   77: };
+   78: 
+   79: const getPurposePrefix = (purpose: MessagePurpose, sender: MessageSender): string => {
+   80:   switch (purpose) {
+   81:     case MessagePurpose.CognitoToMuse:
+   82:       return `�?${MessageSender.Muse}的消�? `;
+   83:     case MessagePurpose.MuseToCognito:
+   84:       return `�?${MessageSender.Cognito}的消�? `;
+   85:     case MessagePurpose.FinalResponse:
+   86:       return `最终答�? `;
+   87:     default:
+   88:       return "";
+   89:   }
+   90: }
+   91: 
+   92: interface MessageBubbleProps {
+   93:   message: ChatMessage;
+   94:   onManualRetry?: (payload: FailedStepPayload) => void;
+   95:   failedStepPayloadForThisMessage?: FailedStepPayload | null;
+   96: }
+   97: 
+   98: const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onManualRetry, failedStepPayloadForThisMessage }) => {
+   99:   const { text: messageText, sender, purpose, timestamp, durationMs, image, id: messageId } = message;
+  100:   const formattedTime = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  101:   const [isCopied, setIsCopied] = useState(false);
+  102: 
+  103:   const isDiscussionStep = purpose === MessagePurpose.CognitoToMuse || purpose === MessagePurpose.MuseToCognito;
+  104:   const isFinalResponse = purpose === MessagePurpose.FinalResponse;
+  105:   const showDuration = durationMs !== undefined && durationMs > 0 && (isDiscussionStep || isFinalResponse || sender === MessageSender.Cognito || sender === MessageSender.Muse);
+  106: 
+  107:   const isPlaceholderAiMessage = (
+  108:     sender === MessageSender.Cognito || sender === MessageSender.Muse
+  109:   ) && messageText.startsWith("(AI") && messageText.endsWith(")");
+  110: 
+  111:   const shouldRenderMarkdown = 
+  112:     (sender === MessageSender.Cognito || sender === MessageSender.Muse) &&
+  113:     !isPlaceholderAiMessage &&
+  114:     purpose !== MessagePurpose.SystemNotification; 
+  115: 
+  116:   let sanitizedHtml = '';
+  117:   if (shouldRenderMarkdown && messageText) {
+  118:     try {
+  119:       const rawHtml = marked.parse(messageText) as string;
+  120:       sanitizedHtml = DOMPurify.sanitize(rawHtml);
+  121:     } catch (e) {
+  122:       console.error("Markdown parsing error:", e);
+  123:       sanitizedHtml = `<p><em>内容解析出错</em></p><pre>${DOMPurify.sanitize(messageText)}</pre>`; 
+  124:     }
+  125:   }
+  126: 
+  127:   const handleCopy = async () => {
+  128:     const prefix = getPurposePrefix(purpose, sender);
+  129:     const textToCopy = prefix + messageText;
+  130:     try {
+  131:       await navigator.clipboard.writeText(textToCopy);
+  132:       setIsCopied(true);
+  133:       setTimeout(() => setIsCopied(false), 2000);
+  134:     } catch (err) {
+  135:       console.error('无法复制文本: ', err);
+  136:     }
+  137:   };
+  138: 
+  139:   // Only allow copy for AI messages to keep user bubble clean
+  140:   const canCopy = (sender === MessageSender.Cognito || sender === MessageSender.Muse) && purpose !== MessagePurpose.SystemNotification && messageText.length > 0;
+  141:   const bubbleTextColorClass = 'text-gray-800';
+  142:   const bubblePurposePrefixColorClass = 'text-gray-700';
+  143:   const bubbleTimestampColorClass = 'text-gray-500';
+  144: 
+  145:   const showManualRetryButton = failedStepPayloadForThisMessage && 
+  146:                                 messageId === failedStepPayloadForThisMessage.originalSystemErrorMsgId && 
+  147:                                 onManualRetry &&
+  148:                                 sender === MessageSender.System &&
+  149:                                 messageText.toLowerCase().includes("失败");
+  150: 
+  151:   return (
+  152:     <div className={`flex ${sender === MessageSender.User ? 'justify-end' : 'justify-start'}`}>
+  153:       <div className={`${getBubbleStyle(sender, purpose, messageText)}`}>
+  154:         {canCopy && (
+  155:           <button
+  156:             onClick={handleCopy}
+  157:             title={isCopied ? "已复�?" : "复制消息"}
+  158:             aria-label={isCopied ? "已复制消息到剪贴�? : "复制消息内容"}
+  159:             className={`absolute top-1.5 right-1.5 p-1 ${sender === MessageSender.User ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-sky-600'} transition-colors rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500`}
+  160:           >
+  161:             {isCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+  162:           </button>
+  163:         )}
+  164:         {sender !== MessageSender.User && (
+  165:           <div className="flex items-center mb-1">
+  166:             <SenderIcon sender={sender} purpose={purpose} messageText={messageText} />
+  167:             <span className={`font-semibold ${getSenderNameStyle(sender)}`}>{sender}</span>
+  168:             {isDiscussionStep && <span className={`ml-2 text-xs text-gray-500`}>(内部讨论)</span>}
+  169:           </div>
+  170:         )}
+  171:         
+  172:         {messageText && ( 
+  173:           shouldRenderMarkdown ? (
+  174:             <>
+  175:               {(isDiscussionStep || isFinalResponse) && (
+  176:                 <span className={`block font-medium ${bubblePurposePrefixColorClass} text-sm mb-0.5`}>
+  177:                   {getPurposePrefix(purpose, sender)}
+  178:                 </span>
+  179:               )}
+  180:               <div
+  181:                 className={`chat-markdown-content text-sm ${bubbleTextColorClass}`}
+  182:                 dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+  183:               />
+  184:             </>
+  185:           ) : (
+  186:             <p className={`text-sm ${bubbleTextColorClass} whitespace-pre-wrap`}>
+  187:               {(isDiscussionStep || isFinalResponse) && ( 
+  188:                 <span className={`font-medium ${bubblePurposePrefixColorClass}`}>{getPurposePrefix(purpose, sender)}</span>
+  189:               )}
+  190:               {messageText}
+  191:             </p>
+  192:           )
+  193:         )}
+  194: 
+  195:         {image && sender === MessageSender.User && (
+  196:            <div className={`mt-2 ${messageText ? `pt-2 border-t ${sender === MessageSender.User ? 'border-blue-400' : 'border-gray-300'}` : ''}`}>
+  197:             <img 
+  198:               src={image.dataUrl} 
+  199:               alt={image.name || "用户上传的图�?} 
+  200:               className="max-w-xs max-h-64 rounded-md object-contain" 
+  201:             />
+  202:           </div>
+  203:         )}
+  204:         {sender !== MessageSender.User && (
+  205:           <div className={`text-xs ${bubbleTimestampColorClass} mt-2 flex justify-between items-center`}>
+  206:             <span>{formattedTime}</span>
+  207:             {showDuration && (
+  208:               <span className="italic"> (耗时: {(durationMs / 1000).toFixed(2)}s)</span>
+  209:             )}
+  210:           </div>
+  211:         )}
+  212:         {showManualRetryButton && failedStepPayloadForThisMessage && onManualRetry && (
+  213:           <div className="mt-2 flex justify-center">
+  214:             <button
+  215:               onClick={() => onManualRetry(failedStepPayloadForThisMessage)}
+  216:               className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-md text-xs font-semibold flex items-center shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-1 focus:ring-offset-red-50"
+  217:               aria-label="手动重试此步�?
+  218:             >
+  219:               <RefreshCw size={14} className="mr-1.5" />
+  220:               手动重试
+  221:             </button>
+  222:           </div>
+  223:         )}
+  224:       </div>
+  225:     </div>
+  226:   );
+  227: };
+  228: 
+  229: export default MessageBubble;

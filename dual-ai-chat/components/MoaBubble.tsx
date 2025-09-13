@@ -1,23 +1,42 @@
 import React from 'react';
-import { MoaStepId, MoaStepResult } from '../types';
+import { ApiProviderConfig, MoeTeamPreset, MoaStepId, MoaStepResult } from '../types';
 import MoaStepCard from './MoaStepCard';
 
 interface Props {
   steps: Record<MoaStepId, MoaStepResult>;
+  preset?: MoeTeamPreset;
+  providersById?: Record<string, ApiProviderConfig>;
 }
 
 const order: MoaStepId[] = ['stage1A', 'stage1B', 'stage2C', 'stage2D'];
 
-const MoaBubble: React.FC<Props> = ({ steps }) => {
+const MoaBubble: React.FC<Props> = ({ steps, preset, providersById }) => {
+  const metaByStep: Record<MoaStepId, { title?: string; brand?: string }> = preset && providersById ? {
+    stage1A: { title: preset.stage1A.modelId || preset.stage1A.displayName, brand: providersById[preset.stage1A.providerId]?.brandKey },
+    stage1B: { title: preset.stage1B.modelId || preset.stage1B.displayName, brand: providersById[preset.stage1B.providerId]?.brandKey },
+    stage2C: { title: preset.stage2C.modelId || preset.stage2C.displayName, brand: providersById[preset.stage2C.providerId]?.brandKey },
+    stage2D: { title: preset.stage2D.modelId || preset.stage2D.displayName, brand: providersById[preset.stage2D.providerId]?.brandKey },
+  } as any : ({} as any);
   return (
-    <div className="mb-4 p-3 rounded-lg shadow-md max-w-2xl mr-auto border bg-white">
-      <div className="text-sm font-semibold text-gray-700 mb-2">MoE 并行执行</div>
-      <div className="space-y-2">
-        {order.map(k => steps[k] && <MoaStepCard key={k} step={steps[k]} />)}
+    <div className="mb-4 p-3 max-w-2xl mr-auto">
+      <div
+        className="text-sm font-semibold mb-5"
+        style={{ color: '#AEB3B9' }}
+      >
+        Mixture-of-Agents
+      </div>
+      <div className="space-y-[15px]">
+        {order.map(k => steps[k] && (
+          <MoaStepCard
+            key={k}
+            step={steps[k]}
+            titleText={metaByStep[k]?.title}
+            brand={metaByStep[k]?.brand as any}
+          />
+        ))}
       </div>
     </div>
   );
 };
 
 export default MoaBubble;
-

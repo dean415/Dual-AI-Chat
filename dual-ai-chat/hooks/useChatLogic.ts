@@ -6,7 +6,6 @@ import { generateResponse as generateGeminiResponse } from '../services/geminiSe
 import { generateOpenAiResponse } from '../services/openaiService'; 
 import {
   AiModel,
-  NOTEPAD_INSTRUCTION_PROMPT_PART,
   DISCUSSION_COMPLETE_TAG,
   AI_DRIVEN_DISCUSSION_INSTRUCTION_PROMPT_PART,
   MAX_AUTO_RETRIES,
@@ -16,7 +15,7 @@ import {
   GEMINI_PRO_MODEL_ID,
   GEMINI_2_5_PRO_PREVIEW_05_06_MODEL_ID
 } from '../constants';
-import { parseAIResponse, fileToBase64, ParsedAIResponse, formatNotepadContentForAI } from '../utils/appUtils';
+import { parseAIResponse, fileToBase64, ParsedAIResponse } from '../utils/appUtils';
 
 interface UseChatLogicProps {
   addMessage: (text: string, sender: MessageSender, purpose: MessagePurpose, durationMs?: number, image?: ChatMessage['image']) => string;
@@ -239,7 +238,7 @@ export const useChatLogic = ({
 
     const imageInstructionForAI = imageApiPartForFlow ? "用户还提供了一张图片。请在您的分析和回复中同时考虑此图片和文本查询。" : "";
     const discussionModeInstructionText = discussionMode === DiscussionMode.AiDriven ? AI_DRIVEN_DISCUSSION_INSTRUCTION_PROMPT_PART : "";
-    const commonPromptInstructions = () => NOTEPAD_INSTRUCTION_PROMPT_PART.replace('{notepadContent}', formatNotepadContentForAI(notepadContent)) + discussionModeInstructionText;
+    const commonPromptInstructions = () => discussionModeInstructionText;
 
     let initialLoopTurn = 0;
     let skipMuseInFirstIteration = false;
@@ -348,9 +347,6 @@ export const useChatLogic = ({
         }
       }
       setIsInternalDiscussionActive(false); 
-      if (cancelRequestRef.current && !failedStepInfo) {
-          addMessage("Request Cancel", MessageSender.Cognito, MessagePurpose.Cancelled);
-      }
 
       if (cancelRequestRef.current) return;
 
@@ -464,7 +460,7 @@ export const useChatLogic = ({
 
     const imageInstructionForAI = geminiImageApiPart ? "用户还提供了一张图片。请在您的分析和回复中同时考虑此图片和文本查询。" : "";
     const discussionModeInstructionText = discussionMode === DiscussionMode.AiDriven ? AI_DRIVEN_DISCUSSION_INSTRUCTION_PROMPT_PART : "";
-    const commonPromptInstructions = () => NOTEPAD_INSTRUCTION_PROMPT_PART.replace('{notepadContent}', formatNotepadContentForAI(notepadContent)) + discussionModeInstructionText;
+    const commonPromptInstructions = () => discussionModeInstructionText;
 
     try {
       const cognitoInitialStepIdentifier = 'cognito-initial-to-muse';
@@ -607,9 +603,7 @@ export const useChatLogic = ({
       if (userImageForDisplay?.dataUrl.startsWith('blob:')) {
         URL.revokeObjectURL(userImageForDisplay.dataUrl);
       }
-      if (cancelRequestRef.current && !failedStepInfo) {
-        addMessage("Request Cancel", MessageSender.Cognito, MessagePurpose.Cancelled);
-      }
+      // Cancel message is handled immediately at App level for instant UI feedback
       if (cancelRequestRef.current && !failedStepInfo && false) {
         addMessage("用户已停止AI响应。", MessageSender.System, MessagePurpose.SystemNotification);
       }
@@ -744,8 +738,9 @@ export const useChatLogic = ({
   const stopGenerating = useCallback(() => {
     cancelRequestRef.current = true;
     setIsInternalDiscussionActive(false);
-    // Let finally blocks handle isLoading and timer
-  }, [setIsInternalDiscussionActive]);
+    setIsLoading(false);
+    stopProcessingTimer();
+  }, [setIsInternalDiscussionActive, setIsLoading, stopProcessingTimer]);
 
   return {
     isLoading,

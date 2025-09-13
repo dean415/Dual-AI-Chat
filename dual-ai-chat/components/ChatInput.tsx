@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Paperclip, XCircle, StopCircle } from 'lucide-react';
+import { Plus, XCircle, StopCircle } from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (message: string, imageFile?: File | null) => void;
@@ -165,7 +165,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
           )}
         </div>
 
-        {/* Right-side paperclip vertically centered regardless of textarea height */}
+        {/* Right-side add icon vertically centered regardless of textarea height */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[1.25rem] h-[1.6em] flex items-center z-10 pointer-events-auto">
           <button
             type="button"
@@ -175,7 +175,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
             aria-label="添加图片附件"
             title="添加图片"
           >
-            <Paperclip className="w-full h-full" />
+            <Plus className="w-[1.05em] h-[1.05em]" />
           </button>
         </div>
 
@@ -188,8 +188,8 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          placeholder="Ask Me Anything"
-          className={`w-full ${leftPaddingClass} ${rightPaddingClass} py-5 bg-white border border-gray-300 rounded-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none placeholder-gray-500 text-gray-800 disabled:opacity-60 resize-none overflow-y-auto no-scrollbar min-h-[64px] max-h-[128px] leading-[1.6] ${isDraggingOver ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}
+          placeholder="Ask anything"
+          className={`w-full ${leftPaddingClass} ${rightPaddingClass} py-5 bg-white border border-gray-300 rounded-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none placeholder-gray-500 text-gray-800 serif-text disabled:opacity-60 resize-none overflow-y-auto no-scrollbar min-h-[64px] max-h-[128px] leading-[1.6] ${isDraggingOver ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}
           rows={1}
           disabled={isDisabledInput}
           aria-label="聊天输入框"

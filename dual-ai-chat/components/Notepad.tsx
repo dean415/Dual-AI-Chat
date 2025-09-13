@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { MessageSender } from '../types';
-import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2, XCircle } from 'lucide-react';
+import { FileText, Eye, Code, Copy, Check, Maximize, Minimize, Undo2, Redo2 } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import ThinkingAnimated from './ThinkingAnimated';
 
 interface NotepadProps {
   content: string;
@@ -78,10 +79,9 @@ const Notepad: React.FC<NotepadProps> = ({
       <header className="p-3 flex items-center justify-between bg-white shrink-0">
         <div className="flex items-center">
           <FileText size={20} className="mr-2 text-black" />
-          <h2 className="text-lg font-semibold text-black">Canvas</h2>
+          <h2 className="text-lg font-semibold text-black serif-text">Canvas</h2>
         </div>
         <div className="flex items-center space-x-1 md:space-x-1.5">
-          {isLoading && !isNotepadFullscreen && <span className="text-xs text-gray-500 italic mr-1">AI 思考中...</span>}
           <button
             onClick={onUndo}
             disabled={!canUndo || isLoading}
@@ -103,16 +103,6 @@ const Notepad: React.FC<NotepadProps> = ({
             <Redo2 size={18} />
           </button>
           <div className="h-4 w-px bg-gray-300 mx-1" aria-hidden="true"></div>
-          {!isPreviewMode && (
-            <button
-              onClick={() => setIsPreviewMode(true)}
-              className={baseButtonClass}
-              title="退出编辑（已自动保存）"
-              aria-label="Exit edit mode"
-            >
-              <XCircle size={18} />
-            </button>
-          )}
           <button
             onClick={onToggleFullscreen}
             className={baseButtonClass}
@@ -142,17 +132,21 @@ const Notepad: React.FC<NotepadProps> = ({
       <div className="flex-grow overflow-y-auto relative bg-white">
         {isPreviewMode ? (
           <div
-            className="markdown-preview notepad-scrollbar"
-            dangerouslySetInnerHTML={{ __html: processedHtml }}
+            className="markdown-preview notepad-scrollbar serif-text relative"
             aria-label="Markdown 预览"
             tabIndex={0}
-            onClick={() => { if (!isLoading) setIsPreviewMode(false); }}
-            onKeyDown={(e) => { if (!isLoading && (e.key === 'Enter' || e.key.length === 1)) { setIsPreviewMode(false); e.preventDefault(); } }}
-            title={isLoading ? 'AI 正在处理，暂不可编辑' : '单击切换到编辑'}
-          />
+            title={isLoading ? 'AI 正在处理，暂不可编辑' : '使用右侧按钮切换编辑/预览'}
+          >
+            <div dangerouslySetInnerHTML={{ __html: processedHtml }} />
+            {isLoading && (
+              <div className="absolute top-2 left-2 pointer-events-none select-none">
+                <ThinkingAnimated sizePx={28} />
+              </div>
+            )}
+          </div>
         ) : (
           <textarea
-            className="w-full h-full p-3 bg-white text-gray-800 font-mono text-base leading-relaxed outline-none resize-none notepad-scrollbar"
+            className="w-full h-full p-3 bg-white text-gray-800 serif-text text-base leading-relaxed outline-none resize-none notepad-scrollbar"
             aria-label="共享记事本内容 (可编辑)"
             value={content}
             onChange={(e) => onEdit && onEdit(e.target.value)}

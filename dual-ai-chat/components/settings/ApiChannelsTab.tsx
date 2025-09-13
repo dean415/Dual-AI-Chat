@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { Plus, PlugZap } from 'lucide-react';
 import ApiChannelForm from '../ApiChannelForm';
+import BrandIcon from '../BrandIcon';
 import type { ApiProviderConfig, TeamPreset } from '../../types';
 
 const ApiChannelsTab: React.FC = () => {
@@ -56,56 +57,51 @@ const ApiChannelsTab: React.FC = () => {
 
   return (
     <section className="space-y-3" aria-labelledby="api-channels-heading">
-      <h3 id="api-channels-heading" className="text-lg font-medium text-gray-800 border-b pb-2">API 渠道管理</h3>
+      <div className="flex items-center justify-between">
+        <h3 id="api-channels-heading" className="text-lg font-semibold text-black">API 渠道管理</h3>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex items-center text-gray-700 hover:text-black p-1"
+          aria-label="Add channel"
+          title="Add channel"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
       {error && <div className="p-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded">{error}</div>}
-      {providers.length === 0 ? (
-        <div className="border-2 border-dashed rounded-md p-10 text-center text-gray-600">
-          <div className="flex flex-col items-center gap-2">
-            <PlugZap className="text-sky-600" />
-            <div className="text-base">暂无 API 渠道</div>
-            <div className="text-sm text-gray-500">添加您的第一个 API 渠道开始使用</div>
-            <button
-              type="button"
-              onClick={openCreate}
-              className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white rounded hover:bg-sky-700"
-            >
-              <Plus size={16} /> 新增渠道
-            </button>
+
+      <div className="space-y-3">
+        {providers.length === 0 ? (
+          <div className="text-sm text-gray-600 flex items-center gap-2">
+            <PlugZap className="text-gray-500" />
+            暂无 API 渠道
           </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white rounded hover:bg-sky-700"
-              aria-label="新增渠道"
-            >
-              <Plus size={16} /> 新增渠道
-            </button>
-          </div>
+        ) : (
           <ul className="divide-y border rounded">
             {providers.map(p => (
               <li key={p.id} className="flex items-center justify-between p-3">
-                <div>
-                  <div className="font-medium text-gray-800">{p.name}</div>
-                  <div className="text-xs text-gray-500">{p.providerType}</div>
+                <div className="flex items-center gap-2">
+                  <BrandIcon brand={p.brandKey} src={p.brandIconUrl} size={16} />
+                  <div>
+                    <div className="font-medium text-gray-900">{p.name}</div>
+                    <div className="text-xs text-gray-500">{p.providerType}</div>
+                  </div>
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => openEdit(p.id)}>编辑</button>
-                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => onDelete(p.id)}>删除</button>
+                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => openEdit(p.id)}>Edit</button>
+                  <button type="button" className="px-2 py-1 text-sm border rounded" onClick={() => onDelete(p.id)}>Delete</button>
                 </div>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+      </div>
 
       {dialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white w-[min(700px,95vw)] rounded shadow-lg p-4 border">
-            <div className="text-lg font-semibold mb-2">{editing ? '编辑渠道' : '新增渠道'}</div>
+            <div className="text-lg font-semibold mb-2">{editing ? 'Edit Channel' : 'Add Channel'}</div>
             <ApiChannelForm initial={editing || undefined} onCancel={() => setDialogOpen(false)} onSave={onSave} />
           </div>
         </div>

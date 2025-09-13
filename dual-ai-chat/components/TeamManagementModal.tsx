@@ -154,16 +154,16 @@ R2D：{{stage2_d_result}}`, parameters: {} },
                 </div>
                 {selectedTeam.mode === 'discussion' ? (
                   <>
-                    <RoleConfigEditor title="Cognito 角色" role={(selectedTeam as DiscussionTeamPreset).cognito} providers={state.apiProviders} availableVariables={{ user_prompt: '' }} onChange={r => updateRole('cognito', r)} />
-                    <RoleConfigEditor title="Muse 角色" role={(selectedTeam as DiscussionTeamPreset).muse} providers={state.apiProviders} availableVariables={{ user_prompt: '' }} onChange={r => updateRole('muse', r)} />
+                    <RoleConfigEditor title="Cognito 角色" role={(selectedTeam as DiscussionTeamPreset).cognito} providers={state.apiProviders} onChange={r => updateRole('cognito', r)} />
+                    <RoleConfigEditor title="Muse 角色" role={(selectedTeam as DiscussionTeamPreset).muse} providers={state.apiProviders} onChange={r => updateRole('muse', r)} />
                   </>
                 ) : (
                   <>
-                    <RoleConfigEditor title="R1A 角色" role={(selectedTeam as MoeTeamPreset).stage1A} providers={state.apiProviders} availableVariables={{ user_prompt: '' }} onChange={r => updateMoeRole('stage1A', r)} />
-                    <RoleConfigEditor title="R1B 角色" role={(selectedTeam as MoeTeamPreset).stage1B} providers={state.apiProviders} availableVariables={{ user_prompt: '' }} onChange={r => updateMoeRole('stage1B', r)} />
-                    <RoleConfigEditor title="R2C 角色（评 R1A）" role={(selectedTeam as MoeTeamPreset).stage2C} providers={state.apiProviders} availableVariables={{ user_prompt: '', stage1_a_result: '' }} onChange={r => updateMoeRole('stage2C', r)} />
-                    <RoleConfigEditor title="R2D 角色（评 R1B）" role={(selectedTeam as MoeTeamPreset).stage2D} providers={state.apiProviders} availableVariables={{ user_prompt: '', stage1_b_result: '' }} onChange={r => updateMoeRole('stage2D', r)} />
-                    <RoleConfigEditor title="Summarizer 角色" role={(selectedTeam as MoeTeamPreset).summarizer} providers={state.apiProviders} availableVariables={{ user_prompt: '', stage1_a_result: '', stage1_b_result: '', stage2_c_result: '', stage2_d_result: '' }} onChange={r => updateMoeRole('summarizer', r)} />
+                    <RoleConfigEditor title="R1A 角色" role={(selectedTeam as MoeTeamPreset).stage1A} providers={state.apiProviders} onChange={r => updateMoeRole('stage1A', r)} />
+                    <RoleConfigEditor title="R1B 角色" role={(selectedTeam as MoeTeamPreset).stage1B} providers={state.apiProviders} onChange={r => updateMoeRole('stage1B', r)} />
+                    <RoleConfigEditor title="R2C 角色（评 R1A）" role={(selectedTeam as MoeTeamPreset).stage2C} providers={state.apiProviders} onChange={r => updateMoeRole('stage2C', r)} />
+                    <RoleConfigEditor title="R2D 角色（评 R1B）" role={(selectedTeam as MoeTeamPreset).stage2D} providers={state.apiProviders} onChange={r => updateMoeRole('stage2D', r)} />
+                    <RoleConfigEditor title="Summarizer 角色" role={(selectedTeam as MoeTeamPreset).summarizer} providers={state.apiProviders} availableVariablesText={`{{user_prompt}}\n{{user_prompt_prev1}}\n{{notepad_content}}\n{{stage1_a_result}}\n{{stage1_b_result}}\n{{stage2_c_result}}\n{{stage2_d_result}}`} onChange={r => updateMoeRole('summarizer', r)} />
                   </>
                 )}
               </div>

@@ -5,11 +5,12 @@ interface Props {
   title: string;
   role: RoleConfig;
   providers: ApiProviderConfig[];
-  availableVariables: Record<string, any>;
+  // Optional plain-text note for template variables, shown as {{var}} list
+  availableVariablesText?: string;
   onChange: (role: RoleConfig) => void;
 }
 
-const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVariables, onChange }) => {
+const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVariablesText, onChange }) => {
   const params = role.parameters || {};
   const setParams = (next: Partial<RoleConfig['parameters']>) => {
     const merged = { ...(role.parameters || {}), ...next };
@@ -91,10 +92,12 @@ const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVa
             <div className="text-xs text-gray-600 mt-1">OpenAI ChatGPT 独家参数</div>
           </div>
         </div>
-        <div className="col-span-2">
-          <div className="text-xs text-gray-600 mb-1">可用模板变量</div>
-          <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">{JSON.stringify(availableVariables, null, 2)}</pre>
-        </div>
+        {availableVariablesText && (
+          <div className="col-span-2">
+            <div className="text-xs text-gray-600 mb-1">可用模板变量</div>
+            <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">{availableVariablesText}</pre>
+          </div>
+        )}
       </div>
     </div>
   );

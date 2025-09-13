@@ -76,6 +76,8 @@ export interface ProviderCapabilities {
   supportsThinkingConfig?: boolean;
 }
 
+export type BrandKey = 'generic' | 'gpt' | 'gemini' | 'claude';
+
 export interface ApiProviderConfig {
   id: string;
   name: string;
@@ -85,6 +87,8 @@ export interface ApiProviderConfig {
   defaultModel?: string;
   timeoutSeconds?: number; // Optional in UI, service can default
   capabilities: ProviderCapabilities;
+  brandKey?: BrandKey; // UI brand icon selection
+  brandIconUrl?: string; // Optional custom icon (SVG/PNG) URL
 }
 
 // Role configuration within a team preset

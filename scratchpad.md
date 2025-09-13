@@ -1,132 +1,142 @@
-## Background and Motivation
+Scope
 
-Dual‑AI Chat targets two execution modes that share UX and state primitives while diverging in orchestration:
-- Discussion Mode: sequential, dual roles (Cognito → Muse) with fixed/AI‑driven rounds. Final output must be written to the right‑side Notebook via `<np-*>` commands.
-- MoE Mode: three‑stage parallel pipeline (R1A/R1B → R2C/R2D → Summarizer). Cards on the left render progressively; the Summarizer only updates the Notebook.
+In-scope: OpenAI messages-based orchestration; Role Library; Workflow Editor; round-parallel execution; history N; assistant(name) injection; MoaStepCard rendering; final notepad snapshot memory.
+Out-of-scope: Gemini-specific history/injection; legacy Discussion/MoE behaviors; images; advanced branching/router.
+Architecture Overview
 
-Current gaps (from AGENT.md Current Project Status):
-- User messages aren’t inserted in MoE flow before processing; UI disabled states are inconsistent (`isLoading` vs `uiIsLoading`).
-- MoE step results render in a batch instead of progressively.
-- “Clear Chat” during MoE doesn’t stop the pipeline, causing ghost writes to the Notebook after clearing.
+Data: Add Role Library and Workflow Presets; global transcript only stores user and notepad snapshots.
+Runtime: New orchestrator executes rounds sequentially; roles per round in parallel; builds OpenAI messages for each role with exact rules.
+UI: New Role Library page and Workflow Editor (双栏); replace Team/MoE UI; render outputs with MoaStepCard.
+Memory: After the whole workflow completes, append one assistant(notepad snapshot) message to transcript; used as future history.
+Data Model
 
-Goal: Activate an orchestrated, testable plan that unifies UI state, delivers progressive MoE rendering, and makes Clear Chat robust, keeping Discussion mode unchanged.
+Role (RoleLibraryItem)
+id: string
+name: string
+providerId: string
+modelId: string
+systemPrompt?: string
+parameters?: { temperature?, top_p?, reasoning_effort?, verbosity? } // present only when enabled
+WorkflowPreset
+id: string
+name: string
+isActive: boolean
+rounds: Array<{
+roles: string[] // role names (you avoid duplicates)
+perRole: Record<string, { historyN: 0 | 2 | 4 | 6 | 8; receiveFrom: string[] }>
+}>
+Transcript (global, across runs)
+Array<{ role: 'user' | 'assistant_notepad'; content: string; at: number }>
+assistant_notepad is the final notepad snapshot; no assistant(name) is persisted here.
+Per-Run Output Index (ephemeral)
+Map<roleName, { roundIndex: number; content: string }[]> // for “接收内容”选择最近一次
+Storage & Migration
 
-## Key Challenges and Analysis
+Add storage keys:
+dualAiChat.roleLibrary
+dualAiChat.workflowPresets
+dualAiChat.activeWorkflowId
+dualAiChat.transcript
+Migration:
+Hide Team/MoE UI; do not migrate old presets initially (keep code until cleanup step).
+Initialize with empty RoleLibrary and one empty Workflow.
+OpenAI Messages Assembly
 
-- State unification: A single UI loading flag (`uiIsLoading`) must gate inputs, selectors, and buttons across both modes.
-- Progressive updates: Emit per‑step completion signals from `moeRunner.ts` and lift them to UI via `useMoeLogic.ts` without breaking stage gating (R1 parallel → R2 parallel → R3).
-- Cancellation and clearing: A cancel flag must block downstream writes immediately; Clear Chat needs a “stop → clear → reset” sequence in MoE.
-- Circuit breaker: If any parallel node fails, surface it clearly and stop the rest of the current run.
-- Observability: Dev‑only logging of rendered prompts and a guard that warns when the Summarizer output doesn’t contain `<np-*>` tags.
-- Image inputs: If provided, convert to base64 data URL and pass through the pipeline.
+For each role execution in a round:
+Base sequence: [system?] → historyN → receiveFrom → currentUser
+system (optional): from role.systemPrompt
+historyN (only two sources; old→new)
+user messages (past user texts)
+assistant_notepad snapshot messages (as assistant without name)
+take last N before current round; append in chronological order
+receiveFrom (inject per UI order):
+for each selected roleName in any previous round (1..i-1), find its latest output in “this run”; append { role: 'assistant', name: roleName, content }
+currentUser: append { role: 'user', content: currentUserInput }
+On success: persist this role’s output to per-run output index as the role’s latest output.
+After all rounds complete: write one global transcript item:
+{ role: 'assistant_notepad', content: finalNotepadContent, at: now }
+Concurrency And Ordering
 
-## High‑level Task Breakdown
+Round-level: rounds execute sequentially (i=1..n)
+Role-level: roles in each round execute in parallel (Promise.all)
+Notepad updates: apply as role outputs arrive; no snapshot used by history inside the same run.
+History N for next runs only: only past transcript (users + notepad snapshots) is used; never the current run’s partial outputs.
+UI Changes
 
-A. Unify user message insertion & UI state
-- App (`dual-ai-chat/App.tsx`)
-  - MoE branch of `onSendMessageUnified`: insert the user message before starting MoE; include `image` metadata when present (base64 + name/type).
-  - Replace top‑bar `disabled={isLoading...}` with `disabled={uiIsLoading...}` on model selectors and buttons.
-  - Keep a single stop entry point that dispatches to MoE or Discussion.
-- Success criteria
-  - User’s message appears immediately in both modes; header controls and status consistently reflect `uiIsLoading`.
-  - “Stop” routes to the correct implementation per mode.
+Left toolbar: replace “团队管理” with “工作流”入口；保留“设置”(API Channels)与“清空”。
+Role Library page:
+List, Add/Edit/Delete role
+Fields: Name, Provider, ModelId, SystemPrompt, toggled parameters
+Remove user template entirely
+Workflow Editor (双栏):
+左栏: Rounds list (default 3), per round role selection (dropdown + free text, comma-separated, 1–4 items)
+右栏: Current round roles (vertical); each row has:
+历史下拉: Disabled/2/4/6/8 (default Disabled)
+接收内容: Multi-select from all roles in previous rounds (1..i-1), default Disabled
+顶栏: “+” add round; circle switch activates this workflow; at most one active
+Chat rendering:
+Use MoaStepCard to show each role’s output; group by round with a small “Round i” label.
+Error Handling
 
-C. Effective “Clear Chat” in MoE
-- Hooks/UI
-  - `useMoeLogic.ts`: add `resetMoeState()` to restore initial thinking states and clear cancel flags.
-  - `App.tsx`: if MoE is running, call `stopMoeGenerating()` before clear; then `initializeChat()`; finally `resetMoeState()` to hide MoA bubble.
-- Success criteria
-  - Clearing during an active MoE session halts further writes; messages and Notebook are cleared; cards disappear.
+Per-role failure: show error in card; other roles continue; next rounds still run.
+接收内容: if no available output for a selected roleName, silently skip.
+API key/provider errors: keep current error paths; do not add special Gemini logic.
+Minimal Execution Flow
 
-B. Progressive display of MoE steps
-- Services/Hooks
-  - `moeRunner.ts`: add optional `onStepUpdate(MoaStepResult)` and invoke it right after each p1A/p1B/p2C/p2D resolves; still gate stages with `await Promise.all`.
-  - `useMoeLogic.ts`: thread `onStepUpdate` through and update `stepsState` incrementally; ignore updates if cancelled.
-- Success criteria
-  - Cards render as each step finishes; R2 waits for R1 completion; Summarizer updates Notebook only.
+On user sends message:
+Append user message to transcript? No — transcript only stores user and notepad snapshots. Yes, we should store user messages for history N. Therefore, append { role: 'user', content, at: now } immediately.
+If active workflow exists, run orchestrator over this input.
+Render round i results using MoaStepCard as they arrive.
+At end, snapshot notepad to transcript as assistant_notepad (single message).
+Step-by-Step Implementation Plan (each step: one function)
 
-D. Observability & Safeguards
-- `roleRunner.ts`: dev‑only log a truncated rendered userPrompt and warn if unknown placeholders remain.
-- Summarizer guard: Warn when no `<np-*>` tags are present.
+Add OpenAI messages call
+Create generateOpenAiChat(messages, modelId, apiKey, baseUrl, parameters?) supporting assistant.name; keep existing string-mode function for legacy.
+Add core types
+Add RoleLibraryItem and WorkflowPreset types; add Transcript message type (user | assistant_notepad).
+Add storage keys
+Implement load/save for roleLibrary, workflowPresets, activeWorkflowId, transcript; initialize defaults.
+Build orchestrator (logic only)
+Create useWorkflowOrchestrator with runWorkflow(userInput): Promise<void>:
+Reads active preset; executes rounds sequentially; roles per round via Promise.all; builds messages; collects outputs; updates notepad; writes final snapshot to transcript.
+Wire orchestrator into send pipeline
+In App.tsx: on user send, append user to transcript; if active workflow → run orchestrator; otherwise no-op or fallback (optional).
+Render results with MoaStepCard
+Add a simple “RoundGroup” component to render round’s role cards; append as results stream in chat area without changing bubble styles.
+Role Library UI
+Add Role Library modal/page; reuse existing RoleConfigEditor internals but hide User Template; add list + add/edit/delete.
+Workflow Editor UI
+Add modal/page with 双栏布局; implement role selection, per-role historyN and receiveFrom; add “+” and activation switch.
+Replace toolbar entry
+Replace Team button with Workflow button; hide Team modal entry; keep file code intact.
+Remove Discussion/MoE runtime hooks
+Stop invoking useChatLogic and useMoeLogic; keep files, but unused in UI to minimize risk.
+Remove User Prompt templates usage
+Strip userPromptTemplate from execution path; keep field removed in Role UI; ignore during calls.
+Final notepad snapshot on completion
+After orchestrator finishes all rounds, append a single { role: 'assistant_notepad', content, at } to transcript.
+Message Assembly Pseudocode
 
-E. QA & Regression
-- Verify Discussion mode behavior and Clear Chat parity.
-- Manual smoke for MoE: progressive cards, circuit breaker, stop/clear correctness.
+history = takeLastN(transcript, N, where role in ['user','assistant_notepad'])
+base = []
+if systemPrompt: base.push({ role: 'system', content: systemPrompt })
+base.push(...history.map(m => m.role === 'user'
+? { role: 'user', content: m.content }
+: { role: 'assistant', content: m.content }))
+for name of receiveFrom (in UI order):
+prev = latestOutputInThisRun(name) // any prior round
+if prev: base.push({ role: 'assistant', name, content: prev })
+base.push({ role: 'user', content: currentUserInput })
+call OpenAI; save output for roleName; render card; apply notepad updates if any
+Acceptance Criteria
 
-Definition of Done
-- All success criteria above satisfied; Discussion mode unchanged; no console errors; basic manual QA passes.
+Round-level concurrency: roles in the same round run concurrently; next round waits.
+History N: exactly includes only (user + notepad snapshots), old→new, then current user.
+接收内容: injects assistant(name) from latest prior-round outputs, in UI order, before current user.
+UI: Role Library + Workflow Editor available; MoaStepCard shows outputs grouped by round; Team/MoE no longer accessible.
+Memory: After completion, one assistant_notepad snapshot is appended; used as history for future runs.
+Risks & Simplifications
 
-## Project Status Board
-
-- [x] A1 Insert user message in MoE branch before start
-- [x] A2 Convert image to base64 and attach metadata
-- [x] A3 Top‑bar: switch `disabled` props to `uiIsLoading`
-- [x] A4 Ensure unified stop function dispatches per mode
-- [ ] C1 Add `resetMoeState()` in `useMoeLogic.ts`
-- [ ] C2 App Clear Chat: stop → initialize → reset MoE state
-- [ ] B1 Add `onStepUpdate` to `moeRunner.ts`
-- [ ] B2 Wire `onStepUpdate` through `useMoeLogic.ts` to `stepsState`
-- [ ] B3 Keep stage gating with `Promise.all`
- - [x] B1 Add `onStepUpdate` to `moeRunner.ts`
- - [x] B2 Wire `onStepUpdate` through `useMoeLogic.ts` to `stepsState`
- - [x] B3 Keep stage gating with `Promise.all`
-- [ ] D1 Dev‑only prompt logging in `roleRunner.ts`
-- [ ] D2 Summarizer Notebook‑tag guard and system message
-- [ ] E1 Discussion mode regression check
-- [ ] E2 MoE flow manual QA (progressive, stop, clear)
-
----
-
-Channel-based Settings Refactor (API 渠道)
-
-- [x] S1 SettingsModal: 三页签骨架（General/API Channels/Advanced），General 仅保留“文字大小”。
-- [x] S2 API Channels: 列表与空态（读取 store）、新增/编辑/删除交互（调用 setProviders）。
-- [ ] S3 ApiChannelForm: 精简为四字段（名称/提供商/API Key/超时），默认超时 300，隐藏能力复选并按类型设默认。
-- [ ] S4 存储与迁移：SCHEMA_VERSION=2，迁移默认超时 300。
-- [ ] S5 useChatLogic 改造为渠道/角色驱动；移除 legacy props；接入 roleRunner。
-- [ ] S6 App.tsx 精简：移除旧 API 状态与欢迎文案分支；拼装 providersById + activeTeam；注入 hooks。
-- [ ] S7 providerAdapter 增加超时控制；统一错误映射。
-
-## Progress (Settings Refactor)
-
-- 2025-09-11: 完成 S1。
-  - 新增 `dual-ai-chat/components/settings/GeneralTab.tsx`、`.../ApiChannelsTab.tsx`、`.../AdvancedTab.tsx`。
-  - 重写 `dual-ai-chat/components/SettingsModal.tsx` 为三页签容器；保留旧 props 类型兼容，但 UI 仅展示：
-    - 常规设置：文字大小（小/中/大/特大）。
-    - API 渠道：空态与只读列表骨架（编辑/删除暂禁用）。
-    - 高级设置：占位文案。
-  - 下一步 S2：在 API Channels 页签接入 store 的增/编/删，使用确认对话与引用校验（团队管理）。
-\- 2025-09-11: 完成 S2。
-  - `ApiChannelsTab` 现已接入 `useAppStore()`，呈现列表与空态，并提供“新增/编辑/删除”。
-  - 新增/编辑：使用现有 `ApiChannelForm` 弹窗（后续 S3 再精简为四字段与必填校验）。
-  - 删除：删除前执行团队引用校验（Discussion/MoE 全角色），若被引用则阻止并给出提示；否则二次确认后删除。
-  - 下一步 S3：精简 `ApiChannelForm` 为四字段（名称/提供商/API Key/超时=300）并隐藏能力复选，按类型自动赋默认能力。
-
-## Current Status / Progress Tracking
-
-- 2025‑09‑10: Orchestra activated in Planner role; seeded architecture plan and tasks.
-- 2025‑09‑10: Executor completed Step A.
-  - Code: `dual-ai-chat/App.tsx` updated to insert user message in MoE path and pass image metadata; top‑bar disabled states and status bar now use `uiIsLoading`.
-  - Verified by static review: `onSendMessageUnified` inserts user bubble before `startMoeProcessing`; model selectors and top buttons disabled on `uiIsLoading`; status bar reflects `uiIsLoading`.
-- Bugfix: Preserve MoE历史气泡，形成连续对话流。
-  - 在 App 侧新增 `moeRunHistory`，在新一轮 MoE 开始前快照上一轮 `stepsState` 并追加渲染；初始化/清空时一并重置。
-  - UI：现在每轮用户发送后都会保留上一轮的 MoE 卡片，不会被新一轮覆盖。
-- Bugfix: 对话时间轴交错排版。
-  - 统一时间轴渲染：将 `messages`、`moeRunHistory` 与“当前 MoE 运行”融合为按时间排序的 timeline，交错渲染 `MessageBubble` 与 `MoaBubble`，避免按发送者分组聚集。
-  - Bugfix: 用户消息乱序（第二轮出现在 MoE 卡片之后）。
-    - `useChatLogic.ts` 与 `App.tsx`（MoE 分支）使用 `flushSync` 先同步插入用户消息，再做耗时操作（如 Base64 转换）和启动流程，确保“用户气泡”始终先于该轮的 MoE 卡片渲染。
- - 2025‑09‑10: Executor completed Step B.
-   - `moeRunner.ts` 增加 `onStepUpdate(step)` 并在 p1A/p1B/p2C/p2D 各自完成时调用。
-   - `useMoeLogic.ts` 透传回调并在未取消时渐进更新 `stepsState`，仍保持 R1→R2 的阶段依赖与最终落盘。
-
-## Executor's Feedback or Assistance Requests
-
-- Confirm: proceed to implement Step A now? (We’ll start with App header controls and MoE user‑message insertion.)
-- Confirm: base64 image format requirements for providers (we currently pass `data:<mime>;base64,<data>` semantics where applicable).
-- Any additional UI copy or telemetry preferences for errors/warnings?
-
-## Lessons
-
-- Include info useful for debugging in program output.
-- Read files before editing; keep changes minimal and focused.
-- If vulnerabilities appear in the terminal, run `npm audit` before proceeding.
+Non-OpenAI roles: not optimized; they can be ignored or executed without history; minimal handling to avoid crashes.
+Name safety: you use short English names; no extra slug needed.
+Persistence: no migration from old Team/MoE; acceptable given your usage.

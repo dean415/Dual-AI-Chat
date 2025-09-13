@@ -30,7 +30,10 @@ export function renderRoleUserPrompt(
 export async function runRole(_input: RoleRunnerInput): Promise<RoleRunnerResult> {
   const { provider, role, templateVars, imageApiPart, renderOptions } = _input;
   const userPrompt = renderRoleUserPrompt(role, templateVars, renderOptions);
-  const systemPrompt = role.systemPrompt;
+  // Render variables for system prompt as well (same vars/options as user template)
+  const systemPrompt = role.systemPrompt
+    ? renderTemplate(role.systemPrompt, templateVars || {}, renderOptions)
+    : undefined;
   const parameters = role.parameters;
 
   const res = await callModel({

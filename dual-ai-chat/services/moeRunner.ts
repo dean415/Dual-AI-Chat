@@ -1,6 +1,5 @@
 import { ApiProviderConfig, MoeTeamPreset, RoleConfig, MoaStepResult } from '../types';
-import { NOTEPAD_INSTRUCTION_PROMPT_PART } from '../constants';
-import { formatNotepadContentForAI } from '../utils/appUtils';
+// Note: notepad content is passed directly via template variable now
 import type { ProviderErrorCode } from './providerAdapter';
 import { runRole } from './roleRunner';
 
@@ -53,13 +52,10 @@ export interface MoeRunnerResult {
 export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerResult> {
   const startAll = performance.now();
 
-  const notepadBlock = NOTEPAD_INSTRUCTION_PROMPT_PART.replace('{notepadContent}', formatNotepadContentForAI(input.notepadContent || ''));
-
   const baseVars: MoeTemplateVars = {
     user_prompt: input.userPrompt,
     user_prompt_prev1: input.prevUserPrompt || '',
     notepad_content: input.notepadContent || '',
-    notepad_instruction_block: notepadBlock,
     ...(input.extraTemplateVars || {}),
   };
 
@@ -73,13 +69,8 @@ export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerRe
 
   const getProvider = (role: RoleConfig): ApiProviderConfig | undefined => input.providersById[role.providerId];
 
-  // 若模板未显式包含记忆变量，则自动前置注入记忆说明块
-  const ensureInjectedRole = (role: RoleConfig): RoleConfig => {
-    const tpl = role.userPromptTemplate || '';
-    const hasManual = /{{\s*(notepad_content|notepad_instruction_block)\s*}}/i.test(tpl);
-    if (hasManual) return role;
-    return { ...role, userPromptTemplate: `{{notepad_instruction_block}}\n\n${tpl}` } as RoleConfig;
-  };
+  // 取消自动注入记事本指令块逻辑，保持用户模板原样
+  const ensureInjectedRole = (role: RoleConfig): RoleConfig => role;
 
   // R1A / R1B 并发，输入：用户消息 + 系统提示词 + 用户提示词
   const p1A = (async () => {

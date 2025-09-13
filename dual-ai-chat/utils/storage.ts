@@ -1,4 +1,4 @@
-import { ApiProviderConfig, DiscussionMode, DiscussionTeamPreset, MoeTeamPreset, TeamPreset } from '../types';
+import { ApiProviderConfig, DiscussionMode, DiscussionTeamPreset, MoeTeamPreset, TeamPreset, BrandKey } from '../types';
 import {
   COGNITO_SYSTEM_PROMPT_HEADER,
   MUSE_SYSTEM_PROMPT_HEADER,
@@ -28,7 +28,7 @@ export const STORAGE_KEYS = {
   activeTeamId: 'dualAiChat.activeTeamId',
 } as const;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // Throttled localStorage writes
 type SaveQueueItem = { key: string; value: any };
@@ -80,6 +80,20 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
   }
 
+  // Upgrade path: v1 -> v2 (introduce brandKey for providers)
+  if (existingVersion === 1) {
+    const loadedProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
+    const loadedTeams = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
+    const loadedActiveTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, loadedTeams[0]?.id || null) || (loadedTeams[0]?.id ?? '');
+    const withBrand: ApiProviderConfig[] = loadedProviders.map(p => ({
+      ...p,
+      brandKey: (p.brandKey || ((p.providerType === 'openai') ? 'gpt' : (p.providerType === 'gemini') ? 'gemini' : 'generic')) as BrandKey,
+    }));
+    save(STORAGE_KEYS.apiProviders, withBrand);
+    save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
+    return { apiProviders: withBrand, teamPresets: loadedTeams, activeTeamId: loadedActiveTeamId, schemaVersion: SCHEMA_VERSION };
+  }
+
   // Migration from legacy config → default provider(s) + default Discussion team
   const providers: ApiProviderConfig[] = [];
 
@@ -100,6 +114,7 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
       defaultModel: legacyOpenAiCognitoModel,
       timeoutSeconds: 60,
       capabilities: { supportsSystemInstruction: true, supportsImages: true, supportsThinkingConfig: false },
+      brandKey: 'gpt',
     });
   }
 
@@ -118,6 +133,7 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
       defaultModel: DEFAULT_COGNITO_MODEL_API_NAME,
       timeoutSeconds: 60,
       capabilities: { supportsSystemInstruction: true, supportsImages: true, supportsThinkingConfig: true },
+      brandKey: 'gemini',
     });
   }
 
@@ -132,6 +148,7 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
       defaultModel: DEFAULT_COGNITO_MODEL_API_NAME,
       timeoutSeconds: 60,
       capabilities: { supportsSystemInstruction: true, supportsImages: true, supportsThinkingConfig: true },
+      brandKey: 'gemini',
     });
   }
 
@@ -182,4 +199,3 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     schemaVersion: SCHEMA_VERSION,
   };
 }
-
