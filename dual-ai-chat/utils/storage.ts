@@ -1,4 +1,4 @@
-import { ApiProviderConfig, DiscussionMode, DiscussionTeamPreset, MoeTeamPreset, TeamPreset, BrandKey } from '../types';
+import { ApiProviderConfig, DiscussionMode, DiscussionTeamPreset, MoeTeamPreset, TeamPreset, BrandKey, Chat, ChatMessage, MessageSender, MessagePurpose } from '../types';
 import {
   COGNITO_SYSTEM_PROMPT_HEADER,
   MUSE_SYSTEM_PROMPT_HEADER,
@@ -31,9 +31,15 @@ export const STORAGE_KEYS = {
   workflowPresets: 'dualAiChat.workflowPresets',
   activeWorkflowId: 'dualAiChat.activeWorkflowId',
   transcript: 'dualAiChat.transcript',
+  // New keys for per-chat storage (v4)
+  chats: 'dualAiChat.chats',
+  activeChatId: 'dualAiChat.activeChatId',
+  // Streaming preferences
+  streamingEnabled: 'dualAiChat.streaming.enabled',
+  streamingIntervalMs: 'dualAiChat.streaming.intervalMs',
 } as const;
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 5;
 
 // Throttled localStorage writes
 type SaveQueueItem = { key: string; value: any };
@@ -87,6 +93,93 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     try { if (localStorage.getItem(STORAGE_KEYS.workflowPresets) === null) save(STORAGE_KEYS.workflowPresets, []); } catch {}
     try { if (localStorage.getItem(STORAGE_KEYS.activeWorkflowId) === null) save(STORAGE_KEYS.activeWorkflowId, ''); } catch {}
     try { if (localStorage.getItem(STORAGE_KEYS.transcript) === null) save(STORAGE_KEYS.transcript, []); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.chats) === null) save(STORAGE_KEYS.chats, []); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.activeChatId) === null) save(STORAGE_KEYS.activeChatId, ''); } catch {}
+    // Ensure streaming defaults
+    try { if (localStorage.getItem(STORAGE_KEYS.streamingEnabled) === null) save(STORAGE_KEYS.streamingEnabled, true); } catch {}
+    try { if (localStorage.getItem(STORAGE_KEYS.streamingIntervalMs) === null) save(STORAGE_KEYS.streamingIntervalMs, 30); } catch {}
+    return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
+  }
+
+  // Upgrade path: v4 -> v5 (add per-chat workflowRuns[] and notepadCurrent defaults)
+  if (existingVersion === 4) {
+    const apiProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
+    const teamPresets = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
+    const activeTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, teamPresets[0]?.id || null) || (teamPresets[0]?.id ?? '');
+    // Ensure chats exist and patch missing fields
+    let chats = load<Chat[]>(STORAGE_KEYS.chats, []);
+    if (Array.isArray(chats) && chats.length) {
+      chats = chats.map((c: any) => ({
+        ...c,
+        workflowRuns: Array.isArray(c?.workflowRuns) ? c.workflowRuns : [],
+        notepadCurrent: typeof c?.notepadCurrent === 'string' ? c.notepadCurrent : '',
+      }));
+      save(STORAGE_KEYS.chats, chats);
+    } else {
+      // If no chats yet, just ensure keys exist; Step 1/ensureInitialChat will handle creation
+      save(STORAGE_KEYS.chats, chats || []);
+    }
+    // Keep activeChatId as-is
+    const activeChatId = load<string>(STORAGE_KEYS.activeChatId, '');
+    if (typeof activeChatId !== 'string') save(STORAGE_KEYS.activeChatId, '');
+    // Bump version
+    save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
+    return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
+  }
+
+  // Upgrade path: v3 -> v4 (introduce chats/activeChatId; keep legacy transcript for now)
+  if (existingVersion === 3) {
+    const apiProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
+    const teamPresets = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
+    const activeTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, teamPresets[0]?.id || null) || (teamPresets[0]?.id ?? '');
+    // Initialize new chat keys
+    let chats = load<Chat[]>(STORAGE_KEYS.chats, []);
+    let activeChatId = load<string>(STORAGE_KEYS.activeChatId, '');
+    if (chats.length === 0) {
+      // Try to wrap legacy transcript into the first chat
+      const transcript = load<any[]>(STORAGE_KEYS.transcript, []);
+      const now = Date.now();
+      const firstId = 'chat-' + generateUniqueId();
+      const messages: ChatMessage[] = [];
+      const snapshots: { at: number; content: string }[] = [];
+      try {
+        for (const t of transcript) {
+          if (!t || typeof t !== 'object') continue;
+          if (t.role === 'user' && typeof t.content === 'string') {
+            messages.push({
+              id: generateUniqueId(),
+              text: t.content,
+              sender: MessageSender.User,
+              purpose: MessagePurpose.UserInput,
+              timestamp: new Date(typeof t.at === 'number' ? t.at : now),
+            } as ChatMessage);
+          } else if (t.role === 'assistant_notepad' && typeof t.content === 'string') {
+            snapshots.push({ at: (typeof t.at === 'number' ? t.at : now), content: t.content });
+          }
+        }
+      } catch {}
+      const createdAt = messages.length ? (messages[0].timestamp as any as Date).getTime?.() || now : now;
+      const updatedAt = (transcript.length ? (typeof transcript[transcript.length-1]?.at === 'number' ? transcript[transcript.length-1].at : now) : now);
+      const chat: Chat = {
+        id: firstId,
+        title: 'New Chat',
+        createdAt,
+        updatedAt,
+        messages,
+        notepadSnapshots: snapshots,
+      } as Chat;
+      chats = [chat];
+      activeChatId = firstId;
+      save(STORAGE_KEYS.chats, chats);
+      save(STORAGE_KEYS.activeChatId, activeChatId);
+    } else {
+      // Ensure active id exists
+      if (!activeChatId) {
+        activeChatId = chats[0].id;
+        save(STORAGE_KEYS.activeChatId, activeChatId);
+      }
+    }
+    save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
     return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
   }
 
@@ -100,6 +193,9 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     save(STORAGE_KEYS.workflowPresets, load(STORAGE_KEYS.workflowPresets, [] as any[]));
     save(STORAGE_KEYS.activeWorkflowId, load(STORAGE_KEYS.activeWorkflowId, ''));
     save(STORAGE_KEYS.transcript, load(STORAGE_KEYS.transcript, [] as any[]));
+    // Also initialize chats keys for forward-compatibility
+    save(STORAGE_KEYS.chats, load(STORAGE_KEYS.chats, [] as any[]));
+    save(STORAGE_KEYS.activeChatId, load(STORAGE_KEYS.activeChatId, ''));
     save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
     return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
   }
@@ -224,6 +320,9 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
   save(STORAGE_KEYS.workflowPresets, load(STORAGE_KEYS.workflowPresets, [] as any[]));
   save(STORAGE_KEYS.activeWorkflowId, load(STORAGE_KEYS.activeWorkflowId, ''));
   save(STORAGE_KEYS.transcript, load(STORAGE_KEYS.transcript, [] as any[]));
+  // Initialize chats keys
+  save(STORAGE_KEYS.chats, load(STORAGE_KEYS.chats, [] as any[]));
+  save(STORAGE_KEYS.activeChatId, load(STORAGE_KEYS.activeChatId, ''));
   save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
 
   return {

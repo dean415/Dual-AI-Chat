@@ -1,6 +1,6 @@
 import { ApiProviderConfig, RoleParameters } from '../types';
 import { generateResponse as generateGeminiResponse } from './geminiService';
-import { generateOpenAiResponse, generateOpenAiChat, OpenAiChatMessage } from './openaiService';
+import { generateOpenAiResponse, generateOpenAiChat, generateOpenAiChatStream, OpenAiChatMessage } from './openaiService';
 
 export type TestConnectionResult = { ok: boolean; latencyMs: number; message?: string };
 
@@ -139,4 +139,41 @@ export async function callModelWithMessages(args: {
   );
   const code = mapErrorToCode(res.error);
   return { text: res.text, durationMs: res.durationMs, errorCode: code, errorMessage: res.error ? res.text : undefined };
+}
+
+// Streaming variant (OpenAI-compatible only)
+export function callModelWithMessagesStream(args: {
+  provider: ApiProviderConfig;
+  modelId: string;
+  messages: OpenAiChatMessage[];
+  parameters?: RoleParameters;
+  onDelta?: (textChunk: string) => void;
+  onError?: (err: Error) => void;
+}): { cancel: () => void; done: Promise<{ text: string; durationMs: number; errorCode?: ProviderErrorCode; errorMessage?: string }> }
+{
+  const { provider, modelId, messages, parameters, onDelta, onError } = args;
+  if (provider.providerType !== 'openai') {
+    const done = Promise.resolve({ text: 'Streaming not supported for this provider.', durationMs: 0, errorCode: 'INVALID_REQUEST' as ProviderErrorCode, errorMessage: 'unsupported provider' });
+    return { cancel: () => {}, done };
+  }
+  const handle = generateOpenAiChatStream({
+    messages,
+    modelId,
+    apiKey: provider.apiKey || '',
+    baseUrl: (provider.baseUrl || '').replace(/\/$/, ''),
+    options: parameters,
+    onDelta,
+    onError,
+  });
+  const done = handle.done
+    .then(res => {
+      const code = mapErrorToCode(res.error); // likely undefined in success path
+      return { text: res.text, durationMs: res.durationMs, errorCode: code, errorMessage: res.error ? res.text : undefined };
+    })
+    .catch(err => {
+      const code = mapErrorToCode(err?.message || '');
+      return Promise.resolve({ text: err instanceof Error ? err.message : String(err), durationMs: 0, errorCode: code, errorMessage: err instanceof Error ? err.message : String(err) });
+    });
+
+  return { cancel: handle.cancel, done };
 }

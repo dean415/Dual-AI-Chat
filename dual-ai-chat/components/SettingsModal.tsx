@@ -37,6 +37,19 @@ interface SettingsModalProps {
   showWorkflowDebug: boolean;
   onWorkflowDebugToggle: () => void;
 
+  // Theme selection
+  theme: 'default' | 'claude' | 'dark';
+  onThemeChange: (theme: 'default' | 'claude' | 'dark') => void;
+
+  // Streaming preferences
+  streamingEnabled: boolean;
+  onStreamingEnabledToggle: () => void;
+  streamIntervalMs: number;
+  onStreamIntervalChange: (ms: number) => void;
+  // Typing caret preference
+  typingCaretEnabled: boolean;
+  onTypingCaretToggle: () => void;
+
   // Legacy API config props (not used after refactor)
   useCustomApiConfig: boolean;
   onUseCustomApiConfigChange: () => void;
@@ -67,6 +80,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onFontSizeScaleChange,
   showWorkflowDebug,
   onWorkflowDebugToggle,
+  theme,
+  onThemeChange,
+  streamingEnabled,
+  onStreamingEnabledToggle,
+  streamIntervalMs,
+  onStreamIntervalChange,
+  typingCaretEnabled,
+  onTypingCaretToggle,
   // swallows the rest for compatibility
   ..._rest
 }) => {
@@ -153,6 +174,65 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </svg>
                     </span>
                   </div>
+                </div>
+                <div className="flex items-center justify-between h-12">
+                  <div className="text-base font-medium text-gray-900">Theme</div>
+                  <div className="relative">
+                    <select
+                      className="appearance-none bg-white text-black text-sm font-semibold pr-3 pl-1 py-1 rounded focus:outline-none focus:ring-0 border-0 hover:bg-gray-50"
+                      value={theme}
+                      onChange={(e)=> onThemeChange(e.target.value as 'default'|'claude'|'dark')}
+                    >
+                      <option value="default">Default</option>
+                      <option value="claude">Claude Style</option>
+                      <option value="dark">Dark Mode</option>
+                    </select>
+                    <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-black">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between h-12">
+                  <div className="text-base font-medium text-gray-900">Enable Streaming</div>
+                  <button
+                    onClick={onStreamingEnabledToggle}
+                    aria-label={streamingEnabled ? 'Disable streaming' : 'Enable streaming'}
+                    className={`w-10 h-6 rounded-full transition-colors ${streamingEnabled ? 'bg-black' : 'bg-gray-300'}`}
+                  >
+                    <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform ${streamingEnabled ? 'translate-x-4' : 'translate-x-1'}`}></span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between h-12">
+                  <div className="text-base font-medium text-gray-900">Streaming Interval (ms)</div>
+                  <div className="relative">
+                    <select
+                      className="appearance-none bg-white text-black text-sm font-semibold pr-3 pl-1 py-1 rounded focus:outline-none focus:ring-0 border-0 hover:bg-gray-50 disabled:opacity-50"
+                      value={String(streamIntervalMs)}
+                      onChange={(e)=> onStreamIntervalChange(parseInt(e.target.value, 10))}
+                      disabled={!streamingEnabled}
+                    >
+                      {[16, 30, 50, 60, 80, 100].map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-black">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between h-12">
+                  <div className="text-base font-medium text-gray-900">Show Typing Caret</div>
+                  <button
+                    onClick={onTypingCaretToggle}
+                    aria-label={typingCaretEnabled ? 'Disable typing caret' : 'Enable typing caret'}
+                    className={`w-10 h-6 rounded-full transition-colors ${typingCaretEnabled ? 'bg-black' : 'bg-gray-300'}`}
+                  >
+                    <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform ${typingCaretEnabled ? 'translate-x-4' : 'translate-x-1'}`}></span>
+                  </button>
                 </div>
                 <div className="flex items-center justify-between h-12">
                   <div className="text-base font-medium text-gray-900">Enable Workflow Debug</div>

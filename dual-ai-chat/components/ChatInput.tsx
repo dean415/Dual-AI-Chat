@@ -147,7 +147,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative chat-input-area">
         {/* inline left controls */}
         {/* Left-side controls (Stop Generating) */}
         <div className="absolute left-2 top-5 flex items-center gap-2 z-20 pointer-events-auto">
@@ -155,12 +155,12 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
             <button
               type="button"
               onClick={onStopGenerating}
-              className="p-2 rounded-full bg-white border border-gray-300 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+              className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 border border-transparent shadow-sm focus:outline-none disabled:opacity-50"
               aria-label="停止生成"
               title="停止生成"
               disabled={!isLoading}
             >
-              <StopCircle size={20} />
+              <span className="block w-3.5 h-3.5 bg-black rounded-[4px]" />
             </button>
           )}
         </div>
@@ -189,7 +189,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           placeholder="Ask anything"
-          className={`w-full ${leftPaddingClass} ${rightPaddingClass} py-5 bg-white border border-gray-300 rounded-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none placeholder-gray-500 text-gray-800 serif-text disabled:opacity-60 resize-none overflow-y-auto no-scrollbar min-h-[64px] max-h-[128px] leading-[1.6] ${isDraggingOver ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}
+          className={`w-full ${leftPaddingClass} ${rightPaddingClass} py-5 bg-white border border-gray-300 rounded-full focus:ring-0 focus:border-gray-300 outline-none placeholder-gray-500 text-gray-800 serif-text disabled:opacity-60 resize-none overflow-y-auto no-scrollbar min-h-[64px] max-h-[128px] leading-[1.6] ${isDraggingOver ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}
           rows={1}
           disabled={isDisabledInput}
           aria-label="聊天输入框"

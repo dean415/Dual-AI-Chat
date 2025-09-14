@@ -379,6 +379,94 @@
       }
       .thinking-caret { animation: none; }
     }
+
+    /* ===== Theme: Claude Style (Off‑white UI) ===== */
+    /* Use a neutral warm off‑white across the app */
+    :root { --claude-offwhite: #FAF9F6; --claude-track: #F1EEE8; }
+    html[data-theme='claude'] body { background-color: var(--claude-offwhite); }
+    /* Turn generic white surfaces to off‑white */
+    html[data-theme='claude'] .bg-white { background-color: var(--claude-offwhite) !important; }
+    html[data-theme='claude'] .markdown-preview { background-color: var(--claude-offwhite) !important; }
+    html[data-theme='claude'] .notepad-scrollbar::-webkit-scrollbar-track { background: var(--claude-track); }
+    html[data-theme='claude'] .settings-modal-content-scrollbar::-webkit-scrollbar-track { background: var(--claude-track); }
+    /* Exception: keep the chat message input area pure white */
+    html[data-theme='claude'] .chat-input-area textarea { background-color: #ffffff !important; }
+    html[data-theme='claude'] .chat-input-area .bg-white { background-color: #ffffff !important; }
+    /* Claude: MoE done badge (circle) -> orange */
+    html[data-theme='claude'] .moa-done-badge circle { fill: #C46345 !important; }
+
+    /* ===== Theme: Dark Mode ===== */
+    :root { --dark-bg: #272727; --dark-input: #2e2e2e; --dark-text: #ffffff; --dark-text-muted: #B3B3B3; }
+    /* Default text in Dark = muted gray (chat area will override to white) */
+    html[data-theme='dark'] body { background-color: var(--dark-bg); color: var(--dark-text-muted); }
+    /* Turn all generic white surfaces into dark charcoal */
+    html[data-theme='dark'] .bg-white { background-color: var(--dark-bg) !important; }
+    html[data-theme='dark'] .markdown-preview { background-color: var(--dark-bg) !important; color: var(--dark-text-muted) !important; }
+    /* Global text variants to muted gray */
+    html[data-theme='dark'] .text-black,
+    html[data-theme='dark'] .text-gray-900,
+    html[data-theme='dark'] .text-gray-800,
+    html[data-theme='dark'] .text-gray-700,
+    html[data-theme='dark'] .text-gray-600,
+    html[data-theme='dark'] .text-gray-500,
+    html[data-theme='dark'] .serif-text,
+    html[data-theme='dark'] .markdown-preview h1,
+    html[data-theme='dark'] .markdown-preview h2,
+    html[data-theme='dark'] .markdown-preview h3,
+    html[data-theme='dark'] .markdown-preview h4,
+    html[data-theme='dark'] .markdown-preview h5,
+    html[data-theme='dark'] .markdown-preview h6,
+    html[data-theme='dark'] a { color: var(--dark-text-muted) !important; }
+    /* Chat area remains white text */
+    html[data-theme='dark'] #chat-panel-wrapper,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h1,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h2,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h3,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h4,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h5,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h6,
+    html[data-theme='dark'] #chat-panel-wrapper .text-gray-900,
+    html[data-theme='dark'] #chat-panel-wrapper .text-gray-800,
+    html[data-theme='dark'] #chat-panel-wrapper .text-gray-700,
+    html[data-theme='dark'] #chat-panel-wrapper .text-gray-600,
+    html[data-theme='dark'] #chat-panel-wrapper .text-gray-500 { color: var(--dark-text) !important; }
+    /* Chat input area: input slightly lighter than page */
+    html[data-theme='dark'] .chat-input-area textarea {
+      background-color: var(--dark-input) !important;
+      color: var(--dark-text) !important;
+      border-color: #3a3a3a !important;
+    }
+    html[data-theme='dark'] .chat-input-area textarea::placeholder { color: var(--dark-text); opacity: 0.7; }
+    /* Darker separators */
+    html[data-theme='dark'] .bg-gray-200 { background-color: #3a3a3a !important; }
+    html[data-theme='dark'] .border-gray-200 { border-color: #3a3a3a !important; }
+    html[data-theme='dark'] hr { border-top-color: #3a3a3a !important; }
+    /* Settings/Config surfaces use dark bg (including gray-50/100) */
+    html[data-theme='dark'] .bg-gray-50,
+    html[data-theme='dark'] .bg-gray-100 { background-color: var(--dark-bg) !important; }
+    /* Settings toggles: on = orange, off = gray (unchanged) */
+    html[data-theme='dark'] .settings-modal-content-scrollbar button.bg-black { background-color: #C46345 !important; }
+
+    /* User chat bubble: pure black background */
+    html[data-theme='dark'] #chat-panel-wrapper .user-bubble {
+      background-color: #000000 !important;
+      color: var(--dark-text) !important;
+    }
+
+    /* Scrollbars in Dark: use separator gray */
+    html[data-theme='dark'] ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+    html[data-theme='dark'] ::-webkit-scrollbar-track { background: #2a2a2a; }
+
+    /* MoE step cards: borders = separator gray; surfaces = dark; arrow = gray (no white circle) */
+    html[data-theme='dark'] .moa-step-card { border-color: #3a3a3a !important; }
+    html[data-theme='dark'] .moa-step-card-header { background-color: var(--dark-bg) !important; color: var(--dark-text) !important; }
+    html[data-theme='dark'] .moa-step-card-body { background-color: var(--dark-bg) !important; color: var(--dark-text) !important; }
+    html[data-theme='dark'] .moa-step-card-debug { background-color: var(--dark-bg) !important; color: var(--dark-text-muted) !important; border-top-color: #3a3a3a !important; }
+    html[data-theme='dark'] .moa-step-arrow { background-color: transparent !important; }
+    html[data-theme='dark'] .moa-step-arrow svg { color: #B3B3B3; }
+    /* Dark: MoE done badge (circle) -> orange */
+    html[data-theme='dark'] .moa-done-badge circle { fill: #C46345 !important; }
   </style>
 <script type="importmap">
 {

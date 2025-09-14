@@ -18,6 +18,7 @@ export interface UseMoeLogicResult {
   ) => Promise<void>;
   stopGenerating: () => void;
   resetMoeMemory: () => void;
+  resetMoeState: () => void;
 }
 
 const emptyStep = (id: MoaStepId, displayName = ''): MoaStepResult => ({
@@ -28,6 +29,7 @@ const emptyStep = (id: MoaStepId, displayName = ''): MoaStepResult => ({
 
 export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadContent }: UseMoeLogicProps): UseMoeLogicResult {
   const cancelRef = useRef(false);
+  const isRunningRef = useRef(false);
   const prevUserPromptRef = useRef<string>('');
   const [isRunning, setIsRunning] = useState(false);
   const [stepsState, setStepsState] = useState<Record<MoaStepId, MoaStepResult>>({
@@ -39,6 +41,7 @@ export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadC
 
   const stopGenerating = useCallback(() => {
     cancelRef.current = true;
+    isRunningRef.current = false;
     setIsRunning(false);
   }, []);
 
@@ -46,6 +49,7 @@ export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadC
     async (userText, imageApiPart) => {
       if (isRunning) return; // 避免重复启动，简化处理
       cancelRef.current = false;
+      isRunningRef.current = true;
       setIsRunning(true);
       // 重置四个步骤为 thinking
       setStepsState({
@@ -67,7 +71,7 @@ export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadC
           notepadContent: notepadContent || '',
           prevUserPrompt: prevForThisRun,
           onStepUpdate: (step) => {
-            if (cancelRef.current) return; // 取消时丢弃
+            if (cancelRef.current || !isRunningRef.current) return; // 取消或已停止时丢弃
             // 渐进更新：仅覆盖对应步骤
             setStepsState(prev => ({ ...prev, [step.stepId]: step } as Record<MoaStepId, MoaStepResult>));
           },
@@ -82,6 +86,7 @@ export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadC
         });
         onSummarizerReady?.(result.summarizer);
       } finally {
+        isRunningRef.current = false;
         setIsRunning(false);
       }
     },
@@ -92,5 +97,14 @@ export function useMoeLogic({ providersById, preset, onSummarizerReady, notepadC
     prevUserPromptRef.current = '';
   }, []);
 
-  return { isRunning, stepsState, startMoeProcessing, stopGenerating, resetMoeMemory };
+  const resetMoeState = useCallback(() => {
+    setStepsState({
+      stage1A: emptyStep('stage1A', preset.stage1A.displayName),
+      stage1B: emptyStep('stage1B', preset.stage1B.displayName),
+      stage2C: emptyStep('stage2C', preset.stage2C.displayName),
+      stage2D: emptyStep('stage2D', preset.stage2D.displayName),
+    });
+  }, [preset]);
+
+  return { isRunning, stepsState, startMoeProcessing, stopGenerating, resetMoeMemory, resetMoeState };
 }

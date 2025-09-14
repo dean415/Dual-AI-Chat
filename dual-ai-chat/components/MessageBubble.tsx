@@ -65,8 +65,8 @@ const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageT
   }
   switch (sender) {
     case MessageSender.User:
-      // Compact rectangular bubble with oval corners; prevents circular shape for very short text
-      return "mb-4 inline-block max-w-[70%] ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle";
+      // User bubble; add hook class for theme overrides
+      return "user-bubble mb-4 inline-block max-w-[70%] ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle";
     case MessageSender.Cognito:
       return baseStyle + "max-w-xl bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
     case MessageSender.Muse:

@@ -110,6 +110,13 @@ export const generateResponse = async (
       requestContents = prompt;
     }
 
+    // Debug: log final payload for Gemini requests when debug mode is enabled
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem('dualAiChatWorkflowDebug') === 'true') {
+        console.debug('[GEMINI FINAL PAYLOAD]', JSON.stringify({ model: modelName, contents: requestContents, config: Object.keys(configForApi).length > 0 ? configForApi : undefined }, null, 2));
+      }
+    } catch {}
+
     const response: GenerateContentResponse = await genAI.models.generateContent({
       model: modelName,
       contents: requestContents,

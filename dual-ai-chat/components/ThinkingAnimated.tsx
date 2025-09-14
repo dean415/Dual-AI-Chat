@@ -51,6 +51,25 @@ const ThinkingAnimated: React.FC<ThinkingAnimatedProps> = ({
   };
 
   useLayoutEffect(() => { measure(); }, [sizePx, gapPx]);
+
+  // Detect theme to invert colors in Dark Mode
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document === 'undefined') return false;
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+  });
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const el = document.documentElement;
+    const obs = new MutationObserver(muts => {
+      for (const m of muts) {
+        if (m.type === 'attributes' && m.attributeName === 'data-theme') {
+          setIsDark(el.getAttribute('data-theme') === 'dark');
+        }
+      }
+    });
+    obs.observe(el, { attributes: true });
+    return () => obs.disconnect();
+  }, []);
   useEffect(() => {
     // Re-measure after fonts load to avoid early incorrect metrics
     const anyDoc = document as any;
@@ -75,9 +94,9 @@ const ThinkingAnimated: React.FC<ThinkingAnimatedProps> = ({
         <defs>
           {/* White highlight band with soft falloff; moves across text */}
           <linearGradient id={`g-${gradId}`} x1="-0.2" y1="0" x2="0" y2="0" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="0%" stopColor={isDark ? '#000000' : '#ffffff'} stopOpacity="0" />
+            <stop offset="50%" stopColor={isDark ? '#000000' : '#ffffff'} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={isDark ? '#000000' : '#ffffff'} stopOpacity="0" />
             <animate
               attributeName="x1"
               values="-0.2; 1.2; -0.2"
@@ -98,7 +117,7 @@ const ThinkingAnimated: React.FC<ThinkingAnimatedProps> = ({
         </defs>
 
         {/* Base text in solid color */}
-        <text ref={baseTextRef} x={0} y={baselineY} fontSize={sizePx} fill={color} fontFamily="Georgia, 'Times New Roman', serif">
+        <text ref={baseTextRef} x={0} y={baselineY} fontSize={sizePx} fill={isDark ? '#ffffff' : color} fontFamily="Georgia, 'Times New Roman', serif">
           {text}
         </text>
 
@@ -108,9 +127,15 @@ const ThinkingAnimated: React.FC<ThinkingAnimatedProps> = ({
         </text>
 
         {/* Blinking square caret placed after the text */}
-        <rect x={caretX} y={baselineY - caretSize} width={Math.ceil(sizePx * 0.5)} height={caretSize} rx={1} ry={1} fill="#000">
-          <animate attributeName="fill" values="#000; #fff; #000" dur={`${caretBlinkDur}s`} repeatCount="indefinite" />
-        </rect>
+        {isDark ? (
+          <rect x={caretX} y={baselineY - caretSize} width={Math.ceil(sizePx * 0.5)} height={caretSize} rx={1} ry={1} fill="#fff" opacity={1}>
+            <animate attributeName="opacity" values="1;0;1" dur={`${caretBlinkDur}s`} repeatCount="indefinite" />
+          </rect>
+        ) : (
+          <rect x={caretX} y={baselineY - caretSize} width={Math.ceil(sizePx * 0.5)} height={caretSize} rx={1} ry={1} fill="#000">
+            <animate attributeName="fill" values="#000; #fff; #000" dur={`${caretBlinkDur}s`} repeatCount="indefinite" />
+          </rect>
+        )}
       </svg>
     </span>
   );

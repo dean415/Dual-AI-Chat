@@ -21,9 +21,10 @@ interface Props {
   rounds: WorkflowRoundView[];
   title?: string;
   showDebug?: boolean;
+  showTypingCaret?: boolean;
 }
 
-const WorkflowBubble: React.FC<Props> = ({ rounds, title, showDebug }) => {
+const WorkflowBubble: React.FC<Props> = ({ rounds, title, showDebug, showTypingCaret }) => {
   return (
     <div className="mb-4 p-3 max-w-2xl mr-auto">
       <div className="text-sm font-semibold mb-3" style={{ color: '#AEB3B9' }}>
@@ -42,6 +43,7 @@ const WorkflowBubble: React.FC<Props> = ({ rounds, title, showDebug }) => {
                 iconUrl={s.iconUrl}
                 showDebug={showDebug}
                 debugPreview={(s as any).debugPreview}
+                showTypingCaret={showTypingCaret}
               />
             ))}
           </div>

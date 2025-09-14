@@ -1,0 +1,35 @@
+/* Shared typing caret styles (blink effect consistent with ThinkingAnimated)
+   Usage: add a <span class="typing-caret" aria-hidden="true"></span> right after streaming text. */
+
+:root {
+  --typing-caret-color: #000;             /* default/claude themes: dark caret */
+  --typing-caret-width: 0.5em;            /* match ThinkingAnimated (~0.5x font size) */
+  --typing-caret-blink-duration: 0.333s;  /* ~3 times per second */
+}
+
+/* Dark theme flips caret color to white */
+:root[data-theme='dark'] {
+  --typing-caret-color: #fff;
+}
+
+@keyframes typing-caret-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.typing-caret {
+  display: inline-block;
+  width: var(--typing-caret-width);
+  height: 1em;                /* align with current font size */
+  margin-left: 1px;           /* slight gap from the last character */
+  background-color: var(--typing-caret-color);
+  vertical-align: -0.1em;     /* nudge to baseline for typical fonts */
+  animation: typing-caret-blink var(--typing-caret-blink-duration) infinite;
+  /* Ensure caret doesn't get selected or capture events */
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Optional helper to hide caret without unmounting */
+.typing-caret--hidden { opacity: 0; animation: none; }

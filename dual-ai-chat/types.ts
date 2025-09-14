@@ -184,3 +184,48 @@ export interface WorkflowPresetMinimal {
   isActive?: boolean; // only one active at a time
   rounds: WorkflowRound[];
 }
+
+// ====== Persisted Workflow Runs per Chat (Option B) ======
+
+export type WorkflowStepStatus = 'thinking' | 'done' | 'error';
+
+export interface WorkflowStepRecord {
+  roleName: string;
+  content: string;
+  status: WorkflowStepStatus;
+  durationMs?: number;
+  error?: string;
+  brand?: BrandKey;
+  iconUrl?: string;
+}
+
+export interface WorkflowRoundRecord {
+  steps: WorkflowStepRecord[];
+}
+
+export interface WorkflowRunRecord {
+  id: string;         // runId
+  startedAt: number;  // epoch ms
+  name?: string;      // optional label
+  rounds: WorkflowRoundRecord[];
+}
+
+// ====== Chats (per-conversation storage) ======
+
+export interface NotepadSnapshot {
+  at: number;         // timestamp
+  content: string;    // full notepad text at this moment
+}
+
+export interface Chat {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  workflowId?: string;            // selected workflow for this chat (optional)
+  messages: ChatMessage[];        // all chat-area messages (user/system/assistant)
+  notepadSnapshots: NotepadSnapshot[]; // per-round (workflow) or per-reply (normal) snapshots
+  // New (Option B – Step 1: optional until schema migration)
+  workflowRuns?: WorkflowRunRecord[];
+  notepadCurrent?: string; // latest Canvas text for quick restore
+}

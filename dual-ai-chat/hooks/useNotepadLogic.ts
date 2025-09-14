@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { MessageSender, NotepadUpdatePayload, MessagePurpose } from '../types'; // Added MessagePurpose
 import { applyNotepadModifications, ParsedAIResponse } from '../utils/appUtils';
+import { setNotepadCurrent as persistNotepadCurrent } from '../utils/chatStore';
 
 export const useNotepadLogic = (initialContent: string) => {
   const [notepadContent, setNotepadContent] = useState<string>(initialContent);
@@ -18,6 +19,8 @@ export const useNotepadLogic = (initialContent: string) => {
     setNotepadHistory(newFullHistory);
     setCurrentHistoryIndex(newFullHistory.length - 1);
     setLastNotepadUpdateBy(updatedBy);
+    // Persist current Canvas text per active chat (debounced by storage.save)
+    try { persistNotepadCurrent(newContent); } catch {}
   }, [notepadHistory, currentHistoryIndex]);
 
   const processNotepadUpdateFromAI = useCallback((

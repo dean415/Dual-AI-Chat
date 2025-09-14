@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MoaStepResult, BrandKey } from '../types';
 import { ChevronDown, XCircle } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TwoDotsSpinner from './TwoDotsSpinner';
 import ThinkingAnimated from './ThinkingAnimated';
+import TypingCaret from './TypingCaret';
+import measureCaretPositionAtEnd from '../utils/caretUtils';
 import BrandIcon from './BrandIcon';
 import GreenCheckBadge from './GreenCheckBadge';
 import { useAppStore } from '../store/appStore';
@@ -17,9 +19,54 @@ interface Props {
   iconUrl?: string; // optional custom provider icon
   showDebug?: boolean;
   debugPreview?: Array<{ role: string; name?: string; content: string }>;
+  showTypingCaret?: boolean; // whether to show blinking caret during streaming
 }
 
-const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDebug, debugPreview }) => {
+const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDebug, debugPreview, showTypingCaret = true }) => {
+  // Wrapper for streaming content to allow absolute-positioned caret in next steps
+  const streamWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [caretPos, setCaretPos] = useState<{ left: number; top: number; height: number } | null>(null);
+
+  // Recompute caret position when streaming content changes, on resize, or theme toggles
+  useEffect(() => {
+    const recompute = () => {
+      if (!showTypingCaret || !streamWrapperRef.current) { setCaretPos(null); return; }
+      if (!(step.status === 'thinking' && step.content && step.content.length > 0)) { setCaretPos(null); return; }
+      const pos = measureCaretPositionAtEnd(streamWrapperRef.current);
+      setCaretPos(pos);
+    };
+
+    // Recompute after this render frame to ensure DOM updated
+    const raf = window.requestAnimationFrame(recompute);
+
+    // Window resize listener
+    const onResize = () => recompute();
+    window.addEventListener('resize', onResize);
+
+    // Wrapper scroll listener (if wrapper is scrollable)
+    const wrapper = streamWrapperRef.current;
+    const onScroll = () => recompute();
+    if (wrapper) wrapper.addEventListener('scroll', onScroll);
+
+    // Theme change observer (data-theme changes may affect metrics)
+    let obs: MutationObserver | null = null;
+    try {
+      const root = document.documentElement;
+      obs = new MutationObserver((muts) => {
+        for (const m of muts) {
+          if (m.type === 'attributes' && m.attributeName === 'data-theme') recompute();
+        }
+      });
+      obs.observe(root, { attributes: true });
+    } catch {}
+
+    return () => {
+      try { window.cancelAnimationFrame(raf); } catch {}
+      window.removeEventListener('resize', onResize);
+      if (wrapper) wrapper.removeEventListener('scroll', onScroll);
+      try { obs && obs.disconnect(); } catch {}
+    };
+  }, [step.status, step.content, showTypingCaret]);
   // Fallback: derive brand/title from active team + providers if not provided
   const { state } = useAppStore();
   let providerIconUrl: string | undefined = iconUrl;
@@ -44,11 +91,46 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
       : <XCircle className="w-4 h-4 text-red-600"/>;
   let body: React.ReactNode = null;
   if (step.status === 'thinking') {
-    body = (
-      <div className="text-[20px] text-gray-800 serif-text leading-none">
-        <ThinkingAnimated sizePx={20} />
-      </div>
-    );
+    // Show progressive content if available; otherwise show thinking animation
+    if (step.content && step.content.length > 0) {
+      try {
+        const html = DOMPurify.sanitize(marked.parse(step.content || '') as string);
+        body = (
+          <div className="serif-text" ref={streamWrapperRef} style={{ position: 'relative' }}>
+            <div className="prose prose-sm max-w-none inline-block align-baseline" dangerouslySetInnerHTML={{ __html: html }} />
+            {/* Dedicated overlay layer for caret, skipped by measurement via aria-hidden */}
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+              {showTypingCaret && (
+                <TypingCaret
+                  hidden={!caretPos}
+                  style={caretPos ? { position: 'absolute', left: caretPos.left, top: caretPos.top, height: caretPos.height } as React.CSSProperties : undefined}
+                />
+              )}
+            </div>
+          </div>
+        );
+      } catch (e) {
+        body = (
+          <div className="serif-text" ref={streamWrapperRef} style={{ position: 'relative' }}>
+            <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto inline-block align-baseline">{step.content}</pre>
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+              {showTypingCaret && (
+                <TypingCaret
+                  hidden={!caretPos}
+                  style={caretPos ? { position: 'absolute', left: caretPos.left, top: caretPos.top, height: caretPos.height } as React.CSSProperties : undefined}
+                />
+              )}
+            </div>
+          </div>
+        );
+      }
+    } else {
+      body = (
+        <div className="text-[20px] text-gray-800 serif-text leading-none">
+          <ThinkingAnimated sizePx={20} />
+        </div>
+      );
+    }
   } else if (step.status === 'error') {
     body = <div className="text-sm text-red-700 whitespace-pre-wrap">{step.error || '执行失败'}</div>;
   } else {
@@ -68,10 +150,10 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
   const singleLine = minifyPreview(debugPreview);
 
   return (
-    <div className="border rounded-[14px] border-[#E6E8EB]">
+    <div className="moa-step-card border rounded-[14px] border-[#E6E8EB]">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between pr-[15px] pl-[20px] py-[10px] bg-white rounded-[14px]"
+        className="moa-step-card-header w-full flex items-center justify-between pr-[15px] pl-[20px] py-[10px] bg-white rounded-[14px]"
         aria-expanded={open}
         aria-label={`展开或收起 ${titleText || step.displayName}`}
       >
@@ -91,19 +173,19 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
               Debug: {singleLine}
             </button>
           )}
-          <div className="rounded-full bg-[#F1F3F5] flex items-center justify-center" style={{ width: 24, height: 24 }}>
+          <div className="moa-step-arrow rounded-full bg-[#F1F3F5] flex items-center justify-center" style={{ width: 24, height: 24 }}>
             <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-0' : '-rotate-90'}`} />
           </div>
         </div>
       </button>
       {debugOpen && showDebug && singleLine && (
-        <div className="px-4 pt-1 pb-2 bg-white border-t border-gray-100">
+        <div className="moa-step-card-debug px-4 pt-1 pb-2 bg-white border-t border-gray-100">
           <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">---
 {JSON.stringify(debugPreview, null, 2)}
 ---</pre>
         </div>
       )}
-      {open && <div className="p-2 bg-white">{body}</div>}
+      {open && <div className="moa-step-card-body p-2 bg-white">{body}</div>}
     </div>
   );
 };

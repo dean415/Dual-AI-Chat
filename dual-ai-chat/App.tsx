@@ -42,18 +42,24 @@ import { useAppStore } from './store/appStore';
 import { useMoeLogic } from './hooks/useMoeLogic';
 import type { MoeTeamPreset, TeamPreset, ApiProviderConfig } from './types';
 import MoaBubble from './components/MoaBubble';
-import LeftToolbar from './components/LeftToolbar';
+// import LeftToolbar from './components/LeftToolbar'; // replaced by ChatSidebar
+import ChatSidebar from './components/ChatSidebar';
 import WorkflowEditorModal from './components/WorkflowEditorModal';
 import { subscribeWorkflowStore } from './utils/workflowStore';
+import { appendMessageToActiveChat, appendNotepadSnapshotToActiveChat, getActiveChatUserHistory, ensureInitialChat } from './utils/chatStore';
 import useWorkflowOrchestrator from './hooks/useWorkflowOrchestrator';
 import WorkflowBubble from './components/WorkflowBubble';
-import { getRoleLibrary, getWorkflowPresets, getActiveWorkflowId, appendTranscript, getTranscript as wfGetTranscript, setTranscript as wfSetTranscript } from './utils/workflowStore';
+import WorkflowSelector from './components/WorkflowSelector';
+import { subscribeChatStore, getActiveChat, getActiveChatId } from './utils/chatStore';
+import { getRoleLibrary, getWorkflowPresets, getActiveWorkflowId } from './utils/workflowStore';
 import type { WorkflowPresetMinimal } from './types';
 import type { WorkflowRoundView, WorkflowStepView } from './components/WorkflowBubble';
 
 const DEFAULT_CHAT_PANEL_PERCENT = 60; 
 const FONT_SIZE_STORAGE_KEY = 'dualAiChatFontSizeScale';
 const DEFAULT_FONT_SIZE_SCALE = 0.875;
+const THEME_STORAGE_KEY = 'dualAiChatTheme';
+type AppTheme = 'default' | 'claude' | 'dark';
 const DEFAULT_GEMINI_CUSTOM_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta';
 
 interface ApiKeyStatus {
@@ -73,11 +79,34 @@ interface ApiKeyStatus {
   const [isRoleLibraryOpen, setIsRoleLibraryOpen] = useState<boolean>(false);
   const [isWorkflowEditorOpen, setIsWorkflowEditorOpen] = useState<boolean>(false);
   const [workflowStoreVersion, setWorkflowStoreVersion] = useState<number>(0);
+  const [chatStoreVersion, setChatStoreVersion] = useState<number>(0);
   const WORKFLOW_DEBUG_STORAGE_KEY = 'dualAiChatWorkflowDebug';
   const [showWorkflowDebug, setShowWorkflowDebug] = useState<boolean>(() => {
     try { const v = localStorage.getItem(WORKFLOW_DEBUG_STORAGE_KEY); return v ? v === 'true' : false; } catch { return false; }
   });
+  // Streaming preferences (General)
+  const STREAMING_ENABLED_STORAGE_KEY = 'dualAiChat.streaming.enabled';
+  const STREAMING_INTERVAL_MS_STORAGE_KEY = 'dualAiChat.streaming.intervalMs';
+  const TYPING_CARET_ENABLED_STORAGE_KEY = 'dualAiChat.typingCaret.enabled';
+  const [streamingEnabled, setStreamingEnabled] = useState<boolean>(() => {
+    try { const v = localStorage.getItem(STREAMING_ENABLED_STORAGE_KEY); return v === null ? true : v === 'true'; } catch { return true; }
+  });
+  const [streamIntervalMs, setStreamIntervalMs] = useState<number>(() => {
+    try { const v = parseInt(localStorage.getItem(STREAMING_INTERVAL_MS_STORAGE_KEY) || '30', 10); return isNaN(v) ? 30 : v; } catch { return 30; }
+  });
+  const [typingCaretEnabled, setTypingCaretEnabled] = useState<boolean>(() => {
+    try { const v = localStorage.getItem(TYPING_CARET_ENABLED_STORAGE_KEY); return v === null ? true : v === 'true'; } catch { return true; }
+  });
+  // Theme: persisted in localStorage, basic HTML data attribute for future styling
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    try { const v = localStorage.getItem(THEME_STORAGE_KEY) as AppTheme | null; return v || 'default'; } catch { return 'default'; }
+  });
   
+  // Ensure there is at least one chat and an activeChatId for per-chat history
+  useEffect(() => {
+    try { ensureInitialChat(); } catch {}
+  }, []);
+
   // Gemini Custom API Config State
   const [useCustomApiConfig, setUseCustomApiConfig] = useState<boolean>(() => {
     const storedValue = localStorage.getItem(USE_CUSTOM_API_CONFIG_STORAGE_KEY);
@@ -166,6 +195,10 @@ interface ApiKeyStatus {
       durationMs,
       image,
     }]);
+    try {
+      // Persist every chat bubble to the active chat timeline
+      appendMessageToActiveChat({ text, sender, purpose, durationMs, image });
+    } catch {}
     return messageId;
   }, []);
 
@@ -291,8 +324,33 @@ interface ApiKeyStatus {
   }, [fontSizeScale]);
 
   useEffect(() => {
+    try {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {}
+  }, [theme]);
+
+  useEffect(() => {
     try { localStorage.setItem(WORKFLOW_DEBUG_STORAGE_KEY, showWorkflowDebug ? 'true' : 'false'); } catch {}
   }, [showWorkflowDebug]);
+  useEffect(() => {
+    try { localStorage.setItem(STREAMING_ENABLED_STORAGE_KEY, streamingEnabled ? 'true' : 'false'); } catch {}
+  }, [streamingEnabled]);
+  useEffect(() => {
+    try { localStorage.setItem(STREAMING_INTERVAL_MS_STORAGE_KEY, String(streamIntervalMs)); } catch {}
+  }, [streamIntervalMs]);
+  useEffect(() => {
+    try { localStorage.setItem(TYPING_CARET_ENABLED_STORAGE_KEY, typingCaretEnabled ? 'true' : 'false'); } catch {}
+  }, [typingCaretEnabled]);
+
+  // react to chat store changes
+  useEffect(() => {
+    const unsub = subscribeChatStore(() => setChatStoreVersion(v => v + 1));
+    return () => unsub();
+  }, []);
+
+  // Track active chat id to clear UI on change (hook added after orchestrator is defined)
+  const lastChatIdRef = useRef<string | null>(null);
 
   const isEffectivelyApiKeyMissing = useMemo(() => {
     if (useOpenAiApiConfig) {
@@ -464,18 +522,13 @@ interface ApiKeyStatus {
     const unsubscribe = subscribeWorkflowStore(() => setWorkflowStoreVersion(v => v + 1));
     return () => { try { unsubscribe(); } catch {} };
   }, []);
-
+  // Active workflow is selected per chat via WorkflowSelector (per-chat selection)
   const activeWorkflow: WorkflowPresetMinimal | null = useMemo(() => {
-    try {
-      const presets = getWorkflowPresets();
-      const activeId = getActiveWorkflowId();
-      if (activeId) return presets.find(p => p.id === activeId) || null;
-      const byFlag = presets.find(p => p.isActive);
-      return byFlag || null;
-    } catch {
-      return null;
-    }
-  }, [workflowStoreVersion]);
+    const wfList = getWorkflowPresets();
+    const chat = getActiveChat();
+    if (!chat || !chat.workflowId) return null;
+    return wfList.find(w => w.id === chat.workflowId) || null;
+  }, [workflowStoreVersion, chatStoreVersion]);
 
   const defaultMoePreset: MoeTeamPreset = useMemo(() => ({
     id: 'default-moe',
@@ -492,7 +545,7 @@ interface ApiKeyStatus {
     return (activeTeam && activeTeam.mode === 'moe' ? (activeTeam as MoeTeamPreset) : defaultMoePreset);
   }, [activeTeam, defaultMoePreset]);
 
-  const { isRunning: isMoeRunning, stepsState, startMoeProcessing, stopGenerating: stopMoeGenerating, resetMoeMemory } = useMoeLogic({ 
+  const { isRunning: isMoeRunning, stepsState, startMoeProcessing, stopGenerating: stopMoeGenerating, resetMoeMemory, resetMoeState } = useMoeLogic({ 
     providersById, 
     preset: moePreset,
     notepadContent,
@@ -518,9 +571,30 @@ interface ApiKeyStatus {
     providers: appState.apiProviders,
     roleLibrary: getRoleLibrary(),
     workflow: activeWorkflow,
-    getTranscript: () => wfGetTranscript(),
-    setTranscript: (t) => wfSetTranscript(t),
+    getTranscript: () => [],
+    setTranscript: (_t) => {},
     getFinalNotepadContent: () => notepadContent,
+    getUserHistory: () => getActiveChatUserHistory(),
+    appendNotepadSnapshot: (content, at) => {
+      try { appendNotepadSnapshotToActiveChat(content, at); } catch {}
+    },
+    disableLegacyTranscript: true,
+    onRoleDelta: ({ roundIndex, roleName, textDelta }) => {
+      setCurrentWorkflowEvent(prev => {
+        if (!prev) return prev;
+        const next = { ...prev, rounds: prev.rounds.map(r => ({ steps: r.steps.map(s => ({ ...s })) })) } as typeof prev;
+        const round = next.rounds[roundIndex];
+        if (round) {
+          const idx = round.steps.findIndex((s: any) => s.roleName === roleName);
+          if (idx >= 0) {
+            const cur = round.steps[idx] as any;
+            cur.status = 'thinking';
+            cur.content = (cur.content || '') + (textDelta || '');
+          }
+        }
+        return next;
+      });
+    },
     onRoleOutput: (evt) => {
       setCurrentWorkflowEvent(prev => {
         if (!prev) return prev;
@@ -568,19 +642,99 @@ interface ApiKeyStatus {
         }
         return next;
       });
-    }
+    },
+    onStreamingFallback: ({ roundIndex, roleName, message }) => {
+      try {
+        const note = message || `Streaming not available for role '${roleName}', falling back to non-streaming.`;
+        addMessage(`[workflow] ${note}`, MessageSender.System, MessagePurpose.SystemNotification);
+      } catch {}
+    },
+    
+    enableStreaming: streamingEnabled,
+    streamIntervalMs: streamIntervalMs,
   });
+
+  // When active chat changes, clear live UI and restore from persisted chat state
+  useEffect(() => {
+    try {
+      const curId = getActiveChatId();
+      if (lastChatIdRef.current === null) {
+        lastChatIdRef.current = curId;
+        return;
+      }
+      if (curId !== lastChatIdRef.current) {
+        lastChatIdRef.current = curId;
+        // Stop any ongoing generation
+        try { stopWorkflow(); } catch {}
+        try { stopMoeGenerating(); } catch {}
+        try { stopChatLogicGeneration(); } catch {}
+        // Reset UI states and restore from persisted chat
+        const active = getActiveChat();
+        // Messages timeline
+        setMessages(active && active.messages ? active.messages : []);
+        // Live workflow bubble should be empty on switch
+        setCurrentWorkflowEvent(null);
+        // Restore archived workflow runs from persisted structure
+        try {
+          const runs = (active as any)?.workflowRuns as any[] | undefined;
+          if (Array.isArray(runs) && runs.length) {
+            const restored = runs.map(r => ({
+              id: r.id,
+              startedAt: typeof r.startedAt === 'number' ? r.startedAt : Date.now(),
+              anchorMessageId: '',
+              name: typeof r.name === 'string' ? r.name : 'Workflow',
+              rounds: (Array.isArray(r.rounds) ? r.rounds : []).map((rd: any) => ({
+                steps: (Array.isArray(rd.steps) ? rd.steps : []).map((s: any) => ({
+                  roleName: String(s.roleName || ''),
+                  titleText: String(s.roleName || ''),
+                  brand: s.brand as any,
+                  iconUrl: s.iconUrl as any,
+                  status: (s.status === 'done' || s.status === 'error') ? s.status : 'thinking',
+                  content: typeof s.content === 'string' ? s.content : undefined,
+                  error: typeof s.error === 'string' ? s.error : undefined,
+                }))
+              })) as any,
+            }));
+            setWorkflowRunHistory(restored as any);
+          } else {
+            setWorkflowRunHistory([]);
+          }
+        } catch {
+          setWorkflowRunHistory([]);
+        }
+        setCurrentMoeEvent(null);
+        setMoeRunHistory([]);
+        // Restore Canvas: prefer notepadCurrent, fallback to last snapshot
+        try {
+          const nc = (active as any)?.notepadCurrent;
+          if (typeof nc === 'string' && nc.length > 0) {
+            applyUserEdit(nc);
+          } else {
+            const lastSnap = active && active.notepadSnapshots && active.notepadSnapshots.length
+              ? active.notepadSnapshots[active.notepadSnapshots.length - 1]
+              : null;
+            if (lastSnap && typeof lastSnap.content === 'string') {
+              applyUserEdit(lastSnap.content);
+            } else {
+              clearNotepadContent();
+            }
+          }
+        } catch { clearNotepadContent(); }
+        setIsNotepadFullscreen(false);
+      }
+    } catch {}
+  }, [chatStoreVersion, stopWorkflow, stopMoeGenerating, stopChatLogicGeneration, clearNotepadContent, setIsNotepadFullscreen, applyUserEdit]);
 
   const onSendMessageUnified = useCallback(async (message: string, imageFile?: File | null) => {
     // If custom workflow is active, run it and bypass legacy flows
     if (activeWorkflow && activeWorkflow.rounds && activeWorkflow.rounds.length > 0) {
       // Archive previous workflow bubble before starting a new run to preserve 1:1 chat layout
       setWorkflowRunHistory(prev => (currentWorkflowEvent ? [...prev, { id: currentWorkflowEvent.runId, rounds: currentWorkflowEvent.rounds, startedAt: currentWorkflowEvent.startedAt, anchorMessageId: currentWorkflowEvent.anchorMessageId, name: currentWorkflowEvent.name }] : prev));
-      appendTranscript({ role: 'user', content: message, at: Date.now() });
       let userMsgId = '';
       flushSync(() => {
         userMsgId = addMessage(message, MessageSender.User, MessagePurpose.UserInput);
       });
+      // Persist occurs via addMessage -> centralized hook (avoid double)
       const lib = getRoleLibrary();
       const libByName = lib.reduce((acc, it) => { acc[it.name] = it; return acc; }, {} as Record<string, any>);
       const rounds = (activeWorkflow.rounds || []).map(r => ({
@@ -642,14 +796,17 @@ interface ApiKeyStatus {
   const handleStopGeneratingUnified = useCallback(() => {
     if (activeWorkflow) {
       stopWorkflow();
+      // Archive current live workflow bubble into history (UI only); persisted rounds remain in chat store
+      setWorkflowRunHistory(prev => (currentWorkflowEvent ? [...prev, { id: currentWorkflowEvent.runId, rounds: currentWorkflowEvent.rounds, startedAt: currentWorkflowEvent.startedAt, anchorMessageId: currentWorkflowEvent.anchorMessageId, name: currentWorkflowEvent.name }] : prev));
       setCurrentWorkflowEvent(null);
       addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
       return;
     }
     if (activeTeam && activeTeam.mode === 'moe') {
-      // Stop MoE pipeline and immediately hide the live MoE bubble
-      stopMoeGenerating();
+      // Immediately drop live bubble and clear step state, then stop engine
       setCurrentMoeEvent(null);
+      try { resetMoeState(); } catch {}
+      stopMoeGenerating();
       // Also add a cancel notice for clear feedback
       addMessage('Cancel Request', MessageSender.System, MessagePurpose.Cancelled);
     } else {
@@ -696,15 +853,32 @@ interface ApiKeyStatus {
   };
 
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+
   return (
     <>
-      <LeftToolbar
-        onOpenTeam={openTeamModal}
-        onOpenWorkflow={openWorkflowModal}
+      {/* Sidebar + mobile toggle */}
+      <ChatSidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(v => !v)}
+        isCollapsed={isSidebarCollapsed}
+        onCollapseToggle={() => setIsSidebarCollapsed(v => !v)}
         onOpenSettings={openSettingsModal}
-        disabled={uiIsLoading}
       />
-      <div className={`flex flex-col h-screen bg-white shadow-2xl overflow-hidden ${isNotepadFullscreen ? 'fixed inset-0 z-40' : 'relative'} pl-12 md:pl-14`}>
+      {!isSidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-2 top-2 z-30 p-2 rounded md:hidden bg-white border border-gray-300 text-gray-700 shadow"
+          aria-label="Open sidebar"
+          title="Open sidebar"
+        >
+          {/* simple icon substitute */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2"/><line x1="9" y1="5" x2="9" y2="19" stroke="currentColor" strokeWidth="2"/></svg>
+        </button>
+      )}
+      <div className={`flex flex-col h-screen bg-white shadow-2xl overflow-hidden ${isNotepadFullscreen ? 'fixed inset-0 z-40' : 'relative'} ${isSidebarCollapsed ? 'md:pl-12' : 'md:pl-[260px]'}`}>
       {/* header removed per new design */}
         
 
@@ -787,6 +961,10 @@ interface ApiKeyStatus {
             style={{ width: `${chatPanelWidthPercent}%` }}
           >
             <div className="flex flex-col flex-grow h-full"> 
+              {/* Workflow selector aligned to top of chat panel only */}
+              <div className="px-3 pt-2 pb-2">
+                <WorkflowSelector />
+              </div>
               <div 
                 ref={chatContainerRef} 
                 className="flex-grow p-4 space-y-4 overflow-y-auto bg-white scroll-smooth chat-scrollbar"
@@ -807,7 +985,8 @@ interface ApiKeyStatus {
                       for (const run of moeRunHistory) {
                         items.push({ type: 'moe', time: run.startedAt, key: `moe-hist-${run.id}`, steps: run.steps });
                       }
-                      if (currentMoeEvent && showMoeBubble) {
+                      // Only render live MoE bubble while actually running
+                      if (currentMoeEvent && isMoeRunning) {
                         items.push({ type: 'moe', time: currentMoeEvent.startedAt, key: `moe-live-${currentMoeEvent.runId}`, steps: stepsState as Record<MoaStepId, MoaStepResult> });
                       }
                     }
@@ -832,7 +1011,7 @@ interface ApiKeyStatus {
                         );
                       }
                       if (it.type === 'moe') return <MoaBubble key={it.key} steps={it.steps} preset={moePreset} providersById={providersById} />;
-                      if (it.type === 'workflow') return <WorkflowBubble key={it.key} rounds={it.rounds} title={it.title} showDebug={showWorkflowDebug} />;
+                      if (it.type === 'workflow') return <WorkflowBubble key={it.key} rounds={it.rounds} title={it.title} showDebug={showWorkflowDebug} showTypingCaret={typingCaretEnabled} />;
                       return null;
                     });
                   })()
@@ -928,6 +1107,14 @@ interface ApiKeyStatus {
           isLoading={isLoading}
           fontSizeScale={fontSizeScale}
           onFontSizeScaleChange={setFontSizeScale}
+          theme={theme}
+          onThemeChange={setTheme}
+          streamingEnabled={streamingEnabled}
+          onStreamingEnabledToggle={() => setStreamingEnabled(prev => !prev)}
+          streamIntervalMs={streamIntervalMs}
+          onStreamIntervalChange={(ms) => setStreamIntervalMs(ms)}
+          typingCaretEnabled={typingCaretEnabled}
+          onTypingCaretToggle={() => setTypingCaretEnabled(prev => !prev)}
           showWorkflowDebug={showWorkflowDebug}
           onWorkflowDebugToggle={() => setShowWorkflowDebug(prev => !prev)}
           // Gemini Custom API Props
@@ -962,5 +1149,3 @@ interface ApiKeyStatus {
 };
 
 export default App;
-
-

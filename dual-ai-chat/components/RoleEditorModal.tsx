@@ -43,7 +43,7 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white w-[min(760px,95vw)] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col">
+      <div className="bg-white w_[min(760px,95vw)] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col" style={{ width: 'min(760px,95vw)' }}>
         <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="text-base font-semibold text-black">Role</div>
           <button onClick={onCancel} className="text-gray-600 hover:text-gray-800" aria-label="Close role editor">
@@ -53,7 +53,7 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
         <div className="p-4 overflow-y-auto">
           <RoleConfigEditor title="" role={draft} providers={providers} hideUserPromptTemplate onChange={setDraft} />
         </div>
-        <div className="px-4 py-2 border-t border-gray-200 bg-white flex justify-end gap-2">
+        <div className="px-4 py-2 bg-white flex justify-end gap-2">
           <button onClick={onCancel} className="px-3 py-1.5 border rounded text-sm text-black hover:bg-gray-100">Cancel</button>
           <button onClick={() => onSave(toItem(draft))} className="px-3 py-1.5 rounded bg-black text-white text-sm hover:bg-gray-800">Save</button>
         </div>
@@ -63,4 +63,3 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
 };
 
 export default RoleEditorModal;
-

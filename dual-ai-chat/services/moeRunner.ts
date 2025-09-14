@@ -1,7 +1,7 @@
 import { ApiProviderConfig, MoeTeamPreset, RoleConfig, MoaStepResult } from '../types';
 // Note: notepad content is passed directly via template variable now
 import type { ProviderErrorCode } from './providerAdapter';
-import { runRole } from './roleRunner';
+import { runRole, runRoleStream } from './roleRunner';
 
 // 模板变量约定（与 AGENT.md 的 MoE 流程一致）
 export type MoeTemplateVars = {
@@ -77,7 +77,25 @@ export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerRe
     const role = ensureInjectedRole(input.preset.stage1A);
     const provider = getProvider(role);
     if (!provider) return { res: makeStep('stage1A', role, 'error', undefined, `未找到 providerId=${role.providerId}`), duration: 0 };
-    const r = await runRole({ provider, role, templateVars: baseVars, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+    let r = await (async () => {
+      if (provider.providerType === 'openai') {
+        let acc = '';
+        const { done } = runRoleStream({
+          provider,
+          role,
+          templateVars: baseVars,
+          imageApiPart: input.imageApiPart,
+          renderOptions: input.renderOptions,
+          onDelta: (chunk) => {
+            acc += chunk;
+            try { input.onStepUpdate?.(makeStep('stage1A', role, 'thinking', acc)); } catch {}
+          },
+        });
+        return await done;
+      } else {
+        return await runRole({ provider, role, templateVars: baseVars, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+      }
+    })();
     const out = r.errorCode
       ? { res: makeStep('stage1A', role, 'error', undefined, r.errorMessage || String(r.errorCode)), duration: r.durationMs }
       : { res: makeStep('stage1A', role, 'done', r.text), duration: r.durationMs };
@@ -89,7 +107,25 @@ export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerRe
     const role = ensureInjectedRole(input.preset.stage1B);
     const provider = getProvider(role);
     if (!provider) return { res: makeStep('stage1B', role, 'error', undefined, `未找到 providerId=${role.providerId}`), duration: 0 };
-    const r = await runRole({ provider, role, templateVars: baseVars, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+    let r = await (async () => {
+      if (provider.providerType === 'openai') {
+        let acc = '';
+        const { done } = runRoleStream({
+          provider,
+          role,
+          templateVars: baseVars,
+          imageApiPart: input.imageApiPart,
+          renderOptions: input.renderOptions,
+          onDelta: (chunk) => {
+            acc += chunk;
+            try { input.onStepUpdate?.(makeStep('stage1B', role, 'thinking', acc)); } catch {}
+          },
+        });
+        return await done;
+      } else {
+        return await runRole({ provider, role, templateVars: baseVars, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+      }
+    })();
     const out = r.errorCode
       ? { res: makeStep('stage1B', role, 'error', undefined, r.errorMessage || String(r.errorCode)), duration: r.durationMs }
       : { res: makeStep('stage1B', role, 'done', r.text), duration: r.durationMs };
@@ -113,7 +149,25 @@ export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerRe
     const role = ensureInjectedRole(input.preset.stage2C);
     const provider = getProvider(role);
     if (!provider) return { res: makeStep('stage2C', role, 'error', undefined, `未找到 providerId=${role.providerId}`), duration: 0 };
-    const r = await runRole({ provider, role, templateVars: varsFor2C, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+    let r = await (async () => {
+      if (provider.providerType === 'openai') {
+        let acc = '';
+        const { done } = runRoleStream({
+          provider,
+          role,
+          templateVars: varsFor2C,
+          imageApiPart: input.imageApiPart,
+          renderOptions: input.renderOptions,
+          onDelta: (chunk) => {
+            acc += chunk;
+            try { input.onStepUpdate?.(makeStep('stage2C', role, 'thinking', acc)); } catch {}
+          },
+        });
+        return await done;
+      } else {
+        return await runRole({ provider, role, templateVars: varsFor2C, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+      }
+    })();
     const out = r.errorCode
       ? { res: makeStep('stage2C', role, 'error', undefined, r.errorMessage || String(r.errorCode)), duration: r.durationMs }
       : { res: makeStep('stage2C', role, 'done', r.text), duration: r.durationMs };
@@ -125,7 +179,25 @@ export async function runMoePipeline(input: MoeRunnerInput): Promise<MoeRunnerRe
     const role = ensureInjectedRole(input.preset.stage2D);
     const provider = getProvider(role);
     if (!provider) return { res: makeStep('stage2D', role, 'error', undefined, `未找到 providerId=${role.providerId}`), duration: 0 };
-    const r = await runRole({ provider, role, templateVars: varsFor2D, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+    let r = await (async () => {
+      if (provider.providerType === 'openai') {
+        let acc = '';
+        const { done } = runRoleStream({
+          provider,
+          role,
+          templateVars: varsFor2D,
+          imageApiPart: input.imageApiPart,
+          renderOptions: input.renderOptions,
+          onDelta: (chunk) => {
+            acc += chunk;
+            try { input.onStepUpdate?.(makeStep('stage2D', role, 'thinking', acc)); } catch {}
+          },
+        });
+        return await done;
+      } else {
+        return await runRole({ provider, role, templateVars: varsFor2D, imageApiPart: input.imageApiPart, renderOptions: input.renderOptions });
+      }
+    })();
     const out = r.errorCode
       ? { res: makeStep('stage2D', role, 'error', undefined, r.errorMessage || String(r.errorCode)), duration: r.durationMs }
       : { res: makeStep('stage2D', role, 'done', r.text), duration: r.durationMs };

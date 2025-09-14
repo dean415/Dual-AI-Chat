@@ -78,7 +78,7 @@ const Notepad: React.FC<NotepadProps> = ({
 
   return (
     <div className={`${notepadBaseClasses} ${isNotepadFullscreen ? fullscreenClasses : ''}`}>
-      <header className="p-3 flex items-center justify-between bg-white shrink-0">
+      <header className="p-3 flex items-center justify-between bg-white shrink-0 sticky top-0 z-30">
         <div className="flex items-center">
           <FileText size={20} className="mr-2 text-black" />
           <h2 className="text-lg font-semibold text-black serif-text">Canvas</h2>
@@ -149,9 +149,12 @@ const Notepad: React.FC<NotepadProps> = ({
             tabIndex={0}
             title={isLoading ? 'AI 正在处理，暂不可编辑' : '使用右侧按钮切换编辑/预览'}
           >
-            <div dangerouslySetInnerHTML={{ __html: processedHtml }} />
+            {/* 当处于 Thinking... 时，隐藏画布内容，避免与动画重影 */}
+            {!isLoading && (
+              <div dangerouslySetInnerHTML={{ __html: processedHtml }} />
+            )}
             {isLoading && (
-              <div className="absolute top-2 left-2 pointer-events-none select-none">
+              <div className="absolute inset-0 flex items-start p-2 pointer-events-none select-none">
                 <ThinkingAnimated sizePx={28} />
               </div>
             )}
