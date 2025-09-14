@@ -1,6 +1,13 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Plus, XCircle, StopCircle } from 'lucide-react';
+import { Plus, XCircle, StopCircle, Sparkles } from 'lucide-react';
+import { useAppStore } from '../store/appStore';
+import { getRoleLibrary } from '../utils/workflowStore';
+import { collectRecentMixedHistoryN } from '../utils/promptOptimizer';
+import { runRole } from '../services/roleRunner';
+import type { RoleConfig } from '../types';
+import { getOptimizerEnabled, getOptimizerN, getOptimizerRoleName, getOptimizerTemplate } from '../utils/promptOptimizerStore';
+import OptimizerRainbow from './OptimizerRainbow';
 
 interface ChatInputProps {
   onSendMessage: (message: string, imageFile?: File | null) => void;
@@ -18,6 +25,12 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
+  const [optimizerStage, setOptimizerStage] = useState<'idle'|'start'|'active'|'end'>('idle');
+  const [sparkPulse, setSparkPulse] = useState<boolean>(false);
+  const [textFade, setTextFade] = useState<boolean>(false);
+  const { state: appState } = useAppStore();
 
   useEffect(() => {
     if (selectedImage) {
@@ -123,6 +136,71 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
   };
 
   const isDisabledInput = isLoading || isApiKeyMissing;
+  const processing = optimizerStage === 'start' || optimizerStage === 'active';
+  const wrapperClass = `relative chat-input-area`;
+
+  const handleOptimizeClick = useCallback(async () => {
+    try {
+      if (isOptimizing) return;
+      if (isLoading || isApiKeyMissing) return;
+      const enabled = getOptimizerEnabled();
+      if (!enabled) return;
+      const roleName = getOptimizerRoleName();
+      const template = getOptimizerTemplate();
+      if (!roleName || !template || !template.trim()) return;
+      const n = getOptimizerN();
+      const recent = collectRecentMixedHistoryN(n);
+      const current = (typeof inputValue === 'string' ? inputValue : '') || '';
+      const lib = getRoleLibrary();
+      const libRole = lib.find(r => r.name === roleName);
+      if (!libRole) return;
+      const provider = appState.apiProviders.find(p => p.id === libRole.providerId);
+      if (!provider) return;
+
+      const tempRole: RoleConfig = {
+        roleId: 'prompt-optimizer-temp',
+        displayName: 'PromptOptimizer',
+        providerId: libRole.providerId,
+        modelId: libRole.modelId,
+        systemPrompt: libRole.systemPrompt,
+        userPromptTemplate: template,
+        parameters: libRole.parameters,
+      };
+
+      setIsOptimizing(true);
+      setOptimizerStage('start');
+      setSparkPulse(true);
+      window.setTimeout(() => setSparkPulse(false), 280);
+      window.setTimeout(() => setOptimizerStage('active'), 240);
+      const res = await runRole({
+        provider,
+        role: tempRole,
+        templateVars: {
+          recent_mixed_messages: recent,
+          current_input: current,
+        },
+      });
+      if (!res.errorCode) {
+        const next = (res.text || '').toString();
+        if (next && next.trim()) {
+          setInputValue(next);
+          setTextFade(true);
+          if (textareaRef.current) {
+            const target = textareaRef.current;
+            target.style.height = 'auto';
+            target.value = next;
+            target.style.height = `${target.scrollHeight}px`;
+          }
+          window.setTimeout(() => setTextFade(false), 260);
+        }
+      }
+    } catch {
+      // silent failure
+    } finally {
+      setOptimizerStage('end');
+      window.setTimeout(() => { setIsOptimizing(false); setOptimizerStage('idle'); }, 260);
+    }
+  }, [isOptimizing, isLoading, isApiKeyMissing, inputValue, appState.apiProviders]);
 
   // dynamic left padding for textarea to avoid overlapping inline controls
   // Left padding accounts for the left-side stop button when loading
@@ -147,7 +225,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
         </div>
       )}
 
-      <div className="relative chat-input-area">
+      <div className={wrapperClass} ref={/* anchor for rainbow overlay alignment */ (el) => { (wrapperRef as any).current = el as HTMLDivElement; }}>
         {/* inline left controls */}
         {/* Left-side controls (Stop Generating) */}
         <div className="absolute left-2 top-5 flex items-center gap-2 z-20 pointer-events-auto">
@@ -167,6 +245,16 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
 
         {/* Right-side add icon vertically centered regardless of textarea height */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[1.25rem] h-[1.6em] flex items-center z-10 pointer-events-auto">
+          {/* Prompt Optimizer sparkles button to the left of plus */}
+          <button
+            type="button"
+            onClick={handleOptimizeClick}
+            className={`h-full w-[1.6em] mr-1 p-0 text-gray-600 hover:text-sky-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center leading-none ${sparkPulse ? 'sparkles-pulse' : ''}`}
+            disabled={isDisabledInput}
+            aria-label="Run Prompt Optimizer"
+          >
+            <Sparkles className="w-[1.05em] h-[1.05em]" />
+          </button>
           <button
             type="button"
             onClick={handleFileButtonClick}
@@ -179,6 +267,9 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
           </button>
         </div>
 
+        {/* Rainbow overlay (SVG, SMIL-based). Uses textareaRef for sizing. */}
+        <OptimizerRainbow targetRef={textareaRef as any} anchorRef={wrapperRef as any} stage={optimizerStage} thickness={6} speedSec={1.6} />
+
         <textarea
           ref={textareaRef}
           value={inputValue}
@@ -190,6 +281,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
           onDragLeave={handleDragLeave}
           placeholder="Ask anything"
           className={`w-full ${leftPaddingClass} ${rightPaddingClass} py-5 bg-white border border-gray-300 rounded-full focus:ring-0 focus:border-gray-300 outline-none placeholder-gray-500 text-gray-800 serif-text disabled:opacity-60 resize-none overflow-y-auto no-scrollbar min-h-[64px] max-h-[128px] leading-[1.6] ${isDraggingOver ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}
+          style={{ opacity: processing ? 0.6 : 1, borderColor: processing ? 'transparent' : undefined }}
           rows={1}
           disabled={isDisabledInput}
           aria-label="聊天输入框"

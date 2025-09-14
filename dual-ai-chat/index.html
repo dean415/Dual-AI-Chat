@@ -467,6 +467,74 @@
     html[data-theme='dark'] .moa-step-arrow svg { color: #B3B3B3; }
     /* Dark: MoE done badge (circle) -> orange */
     html[data-theme='dark'] .moa-done-badge circle { fill: #C46345 !important; }
+
+    /* Prompt Optimizer animated rainbow border (start -> active -> end) */
+    .chat-input-area.optimizer-start textarea,
+    .chat-input-area.optimizer-active textarea,
+    .chat-input-area.optimizer-end textarea {
+      border: 1.5px solid transparent !important;
+      background:
+        linear-gradient(#ffffff, #ffffff) padding-box,
+        linear-gradient(90deg, #34d399, #f59e0b, #ef4444, #8b5cf6, #06b6d4, #34d399) border-box !important;
+      background-clip: padding-box, border-box !important;
+      background-size: 300% 100% !important;
+      will-change: background-position, opacity, transform;
+    }
+    html[data-theme='dark'] .chat-input-area.optimizer-start textarea,
+    html[data-theme='dark'] .chat-input-area.optimizer-active textarea,
+    html[data-theme='dark'] .chat-input-area.optimizer-end textarea {
+      background:
+        linear-gradient(var(--dark-input), var(--dark-input)) padding-box,
+        linear-gradient(90deg, #34d399, #f59e0b, #ef4444, #8b5cf6, #06b6d4, #34d399) border-box !important;
+      background-clip: padding-box, border-box !important;
+    }
+
+    /* Start: reveal from sparkles (right center) */
+    .chat-input-area.optimizer-start textarea {
+      animation: optimizer-start-reveal 240ms linear forwards;
+      background-position: 100% 50%;
+    }
+    @keyframes optimizer-start-reveal {
+      0% { background-position: 100% 50%; opacity: 0.6; }
+      100% { background-position: 0% 50%; opacity: 1; }
+    }
+
+    /* Active: fast flowing spectrum (1.6s cycle, linear) */
+    .chat-input-area.optimizer-active textarea {
+      animation: optimizer-flow 1.7s linear infinite;
+      background-position: 0% 50%;
+    }
+    @keyframes optimizer-flow {
+      0%   { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+
+    /* End: fade out border smoothly */
+    .chat-input-area.optimizer-end textarea {
+      animation: optimizer-end-fade 240ms linear forwards;
+    }
+    @keyframes optimizer-end-fade {
+      0% { opacity: 1; }
+      100% { opacity: 1; background-position: 300% 50%; filter: saturate(80%); }
+    }
+
+    /* Dim text during processing */
+    .chat-input-area.optimizer-processing textarea { opacity: 0.6; transition: opacity 150ms ease; }
+
+    /* Fade-in effect for new text */
+    .chat-input-area .optimizer-text-fade { animation: optimizer-text-fade-in 240ms ease-out; }
+    @keyframes optimizer-text-fade-in {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    /* Sparkles click pulse */
+    .sparkles-pulse { animation: sparkles-pop 260ms ease-out; }
+    @keyframes sparkles-pop {
+      0% { transform: scale(0.9); filter: drop-shadow(0 0 0px rgba(250,204,21,0.0)); }
+      60% { transform: scale(1.08); filter: drop-shadow(0 0 6px rgba(250,204,21,0.6)); }
+      100% { transform: scale(1.0); filter: drop-shadow(0 0 0px rgba(250,204,21,0.0)); }
+    }
   </style>
 <script type="importmap">
 {

@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { DiscussionMode } from '../types';
-import { X, Cog, PlugZap, Users, GitBranch } from 'lucide-react';
+import { X, Cog, PlugZap, Users, GitBranch, Sparkles } from 'lucide-react';
+import PromptOptimizerCard from './settings/PromptOptimizerCard';
 import ApiChannelsTab from './settings/ApiChannelsTab';
+import PromptOptimizerCard from './settings/PromptOptimizerCard';
 import { useAppStore } from '../store/appStore';
 import { getRoleLibrary, setRoleLibrary, getWorkflowPresets, setWorkflowPresets, getActiveWorkflowId, setActiveWorkflowId } from '../utils/workflowStore';
 import type { RoleLibraryItem } from '../types';
@@ -133,6 +135,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               { key: 'api', label: 'API', icon: <PlugZap size={16} className="mr-2" /> },
               { key: 'roles', label: 'Roles', icon: <Users size={16} className="mr-2" /> },
               { key: 'orchestra', label: 'Orchestra', icon: <GitBranch size={16} className="mr-2" /> },
+              { key: 'optimizer', label: 'Prompt optimizer', icon: <Sparkles size={16} className="mr-2" /> },
             ].map((it: any) => (
               <button
                 key={it.key}
@@ -149,7 +152,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Right content */}
         <section className="flex-1 flex flex-col bg-white">
           <div className="px-6 h-12 flex items-center text-xl font-semibold text-black">
-            {active==='general'?'General':active==='api'?'API':active==='roles'?'Roles':'Orchestra'}
+            {active==='general' ? 'General' : active==='api' ? 'API' : active==='roles' ? 'Roles' : active==='orchestra' ? 'Orchestra' : active==='optimizer' ? 'Prompt optimizer' : ''}
           </div>
           <div className="h-px bg-gray-200 mx-6" />
           <div className="flex-1 overflow-y-auto settings-modal-content-scrollbar px-6 py-3 pb-10">
@@ -244,6 +247,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform ${showWorkflowDebug ? 'translate-x-4' : 'translate-x-1'}`}></span>
                   </button>
                 </div>
+              </div>
+            )}
+            {active === 'optimizer' && (
+              <div className="space-y-3">
+                <PromptOptimizerCard />
               </div>
             )}
             {active === 'api' && (
