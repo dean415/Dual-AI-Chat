@@ -198,23 +198,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center justify-between h-12">
-                  <div className="text-base font-medium text-gray-900">Enable Streaming</div>
-                  <button
-                    onClick={onStreamingEnabledToggle}
-                    aria-label={streamingEnabled ? 'Disable streaming' : 'Enable streaming'}
-                    className={`w-10 h-6 rounded-full transition-colors ${streamingEnabled ? 'bg-black' : 'bg-gray-300'}`}
-                  >
-                    <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform ${streamingEnabled ? 'translate-x-4' : 'translate-x-1'}`}></span>
-                  </button>
-                </div>
-                <div className="flex items-center justify-between h-12">
                   <div className="text-base font-medium text-gray-900">Streaming Interval (ms)</div>
                   <div className="relative">
                     <select
                       className="appearance-none bg-white text-black text-sm font-semibold pr-3 pl-1 py-1 rounded focus:outline-none focus:ring-0 border-0 hover:bg-gray-50 disabled:opacity-50"
                       value={String(streamIntervalMs)}
                       onChange={(e)=> onStreamIntervalChange(parseInt(e.target.value, 10))}
-                      disabled={!streamingEnabled}
                     >
                       {[16, 30, 50, 60, 80, 100].map(v => (
                         <option key={v} value={v}>{v}</option>

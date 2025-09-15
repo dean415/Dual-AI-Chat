@@ -45,10 +45,13 @@ const getSenderNameStyle = (sender: MessageSender): string => {
 }
 
 const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageText: string): string => {
-  let baseStyle = "mb-4 p-4 rounded-lg shadow-md break-words whitespace-pre-wrap overflow-hidden relative border "; 
+  // Make bubbles nearly full width of chat panel while keeping equal left/right margins
+  // Use Tailwind arbitrary values for max width minus horizontal margins (mx-2/md:mx-3)
+  const wideMax = "max-w-[calc(100%_-_1rem)] md:max-w-[calc(100%_-_1.5rem)] mx-2 md:mx-3";
+  let baseStyle = `mb-4 p-4 rounded-lg shadow-md break-words whitespace-pre-wrap overflow-hidden relative border ${wideMax} `; 
   // Neutral, pale gray AI bubble for cancelled replies
   if (purpose === MessagePurpose.Cancelled) {
-    return "mb-4 inline-block max-w-[70%] mr-auto rounded-[14px] px-4 py-2 bg-gray-50 text-gray-400 shadow-none border border-gray-200";
+    return `mb-4 inline-block ${wideMax} mr-auto rounded-[14px] px-4 py-2 bg-gray-50 text-gray-400 shadow-none border border-gray-200`;
   }
   if (purpose === MessagePurpose.SystemNotification) {
     if (
@@ -66,13 +69,13 @@ const getBubbleStyle = (sender: MessageSender, purpose: MessagePurpose, messageT
   switch (sender) {
     case MessageSender.User:
       // User bubble; add hook class for theme overrides
-      return "user-bubble mb-4 inline-block max-w-[70%] ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle";
+      return `user-bubble mb-4 inline-block ${wideMax} ml-auto rounded-[14px] px-4 py-2 break-words whitespace-pre-wrap overflow-hidden relative shadow-none border-0 bg-[#f5f5f5] text-gray-900 align-middle`;
     case MessageSender.Cognito:
-      return baseStyle + "max-w-xl bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
+      return baseStyle + "bg-green-50 border-green-300 text-green-800 mr-auto rounded-br-none";
     case MessageSender.Muse:
-      return baseStyle + "max-w-xl bg-purple-50 border-purple-300 text-purple-800 mr-auto rounded-br-none";
+      return baseStyle + "bg-purple-50 border-purple-300 text-purple-800 mr-auto rounded-br-none";
     default:
-      return baseStyle + "max-w-xl bg-white border-gray-300 text-gray-700 mr-auto";
+      return baseStyle + "bg-white border-gray-300 text-gray-700 mr-auto";
   }
 };
 

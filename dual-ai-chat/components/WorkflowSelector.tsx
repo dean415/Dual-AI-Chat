@@ -29,7 +29,19 @@ const WorkflowSelector: React.FC = () => {
   const activeChat = useMemo(() => getActiveChat(), [chatVersion]);
   const selectedId = activeChat?.workflowId || '';
   const selected = workflows.find(w => w.id === selectedId) || null;
-  const label = selected ? selected.name : 'Auto';
+
+  // Ensure a default workflow is selected when none is set: pick the first
+  useEffect(() => {
+    try {
+      if (!activeChat?.workflowId && workflows.length > 0) {
+        setActiveChatWorkflow(workflows[0].id);
+        setChatVersion(v => v + 1);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChat?.workflowId, workflows.length]);
+
+  const label = selected ? selected.name : (workflows[0]?.name || '');
 
   return (
     <div className="relative" ref={dropdownRef}>

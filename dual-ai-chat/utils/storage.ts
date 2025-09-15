@@ -39,7 +39,7 @@ export const STORAGE_KEYS = {
   streamingIntervalMs: 'dualAiChat.streaming.intervalMs',
 } as const;
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 // Throttled localStorage writes
 type SaveQueueItem = { key: string; value: any };
@@ -98,7 +98,47 @@ export function ensureSchemaAndMigrate(): EnsureSchemaResult {
     // Ensure streaming defaults
     try { if (localStorage.getItem(STORAGE_KEYS.streamingEnabled) === null) save(STORAGE_KEYS.streamingEnabled, true); } catch {}
     try { if (localStorage.getItem(STORAGE_KEYS.streamingIntervalMs) === null) save(STORAGE_KEYS.streamingIntervalMs, 30); } catch {}
+    // Ensure per-role streamingEnabled default true in roleLibrary (idempotent)
+    try {
+      const lib = load<any[]>(STORAGE_KEYS.roleLibrary, []);
+      if (Array.isArray(lib) && lib.length) {
+        const patched = lib.map(r => ({ ...r, streamingEnabled: (typeof r?.streamingEnabled === 'boolean') ? r.streamingEnabled : true }));
+        save(STORAGE_KEYS.roleLibrary, patched);
+      }
+    } catch {}
     return { apiProviders, teamPresets, activeTeamId, schemaVersion: SCHEMA_VERSION };
+  }
+
+  // Upgrade path: v5 -> v6 (add per-role streamingEnabled default true)
+  if (existingVersion === 5) {
+    const apiProviders = load<ApiProviderConfig[]>(STORAGE_KEYS.apiProviders, []);
+    const teamPresets = load<TeamPreset[]>(STORAGE_KEYS.teamPresets, []);
+    const activeTeamId = load<string | null>(STORAGE_KEYS.activeTeamId, teamPresets[0]?.id || null) || (teamPresets[0]?.id ?? '');
+    // Patch roleLibrary entries
+    try {
+      const lib = load<any[]>(STORAGE_KEYS.roleLibrary, []);
+      if (Array.isArray(lib) && lib.length) {
+        const patched = lib.map(r => ({ ...r, streamingEnabled: (typeof r?.streamingEnabled === 'boolean') ? r.streamingEnabled : true }));
+        save(STORAGE_KEYS.roleLibrary, patched);
+      }
+    } catch {}
+    // Patch team presets roles
+    const fixRole = (r: any) => ({ ...r, streamingEnabled: (typeof r?.streamingEnabled === 'boolean') ? r.streamingEnabled : true });
+    const patchedTeams = (teamPresets || []).map(t => {
+      if (!t || typeof t !== 'object') return t;
+      if ((t as any).mode === 'discussion') {
+        const d = t as any;
+        return { ...d, cognito: fixRole(d.cognito), muse: fixRole(d.muse) };
+      }
+      if ((t as any).mode === 'moe') {
+        const m = t as any;
+        return { ...m, stage1A: fixRole(m.stage1A), stage1B: fixRole(m.stage1B), stage2C: fixRole(m.stage2C), stage2D: fixRole(m.stage2D), summarizer: fixRole(m.summarizer) };
+      }
+      return t;
+    }) as TeamPreset[];
+    save(STORAGE_KEYS.teamPresets, patchedTeams);
+    save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION);
+    return { apiProviders, teamPresets: patchedTeams, activeTeamId, schemaVersion: SCHEMA_VERSION };
   }
 
   // Upgrade path: v4 -> v5 (add per-chat workflowRuns[] and notepadCurrent defaults)

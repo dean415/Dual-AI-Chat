@@ -51,8 +51,8 @@ const TeamManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
       mode: 'discussion',
       discussionMode: DiscussionMode.AiDriven,
       fixedTurns: DEFAULT_MANUAL_FIXED_TURNS,
-      cognito: { roleId: 'cognito', displayName: 'Cognito', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: COGNITO_SYSTEM_PROMPT_HEADER, userPromptTemplate: '{{user_prompt}}', parameters: {} },
-      muse: { roleId: 'muse', displayName: 'Muse', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: MUSE_SYSTEM_PROMPT_HEADER, userPromptTemplate: '{{user_prompt}}', parameters: {} },
+      cognito: { roleId: 'cognito', displayName: 'Cognito', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: COGNITO_SYSTEM_PROMPT_HEADER, userPromptTemplate: '{{user_prompt}}', parameters: {}, streamingEnabled: true },
+      muse: { roleId: 'muse', displayName: 'Muse', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: MUSE_SYSTEM_PROMPT_HEADER, userPromptTemplate: '{{user_prompt}}', parameters: {}, streamingEnabled: true },
     };
     setTeamPresets([...state.teamPresets, newTeam]);
     setSelectedId(id);
@@ -66,8 +66,8 @@ const TeamManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
       id,
       name: 'MoE 团队',
       mode: 'moe',
-      stage1A: { roleId: 'stage1A', displayName: 'R1A', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: '{{user_prompt}}', parameters: {} },
-      stage1B: { roleId: 'stage1B', displayName: 'R1B', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: '{{user_prompt}}', parameters: {} },
+      stage1A: { roleId: 'stage1A', displayName: 'R1A', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: '{{user_prompt}}', parameters: {}, streamingEnabled: true },
+      stage1B: { roleId: 'stage1B', displayName: 'R1B', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: '{{user_prompt}}', parameters: {}, streamingEnabled: true },
       stage2C: { roleId: 'stage2C', displayName: 'R2C', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: `用户请求：{{user_prompt}}
 R1A 的答案：{{stage1_a_result}}`, parameters: {} },
       stage2D: { roleId: 'stage2D', displayName: 'R2D', providerId: pid, modelId: firstProvider?.defaultModel || '', systemPrompt: '', userPromptTemplate: `用户请求：{{user_prompt}}
@@ -76,7 +76,7 @@ R1B 的答案：{{stage1_b_result}}`, parameters: {} },
 R1A：{{stage1_a_result}}
 R1B：{{stage1_b_result}}
 R2C：{{stage2_c_result}}
-R2D：{{stage2_d_result}}`, parameters: {} },
+R2D：{{stage2_d_result}}`, parameters: {}, streamingEnabled: true },
     };
     setTeamPresets([...state.teamPresets, newTeam]);
     setSelectedId(id);

@@ -153,6 +153,7 @@ const WorkflowEditorModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 systemPrompt: item.systemPrompt,
                 userPromptTemplate: undefined,
                 parameters: item.parameters,
+                streamingEnabled: (item as any).streamingEnabled,
               });
             }
           }}
@@ -189,6 +190,7 @@ const WorkflowEditorModal: React.FC<Props> = ({ isOpen, onClose }) => {
         modelId: draft.modelId,
         systemPrompt: draft.systemPrompt,
         parameters: draft.parameters,
+        streamingEnabled: (draft as any).streamingEnabled,
       };
       const next = roleLibrary.map(r => (r.id === updated.id ? updated : r));
       setRoleLibraryLocal(next);

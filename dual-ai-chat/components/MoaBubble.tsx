@@ -18,7 +18,7 @@ const MoaBubble: React.FC<Props> = ({ steps, preset, providersById }) => {
     stage2D: { title: preset.stage2D.displayName, brand: providersById[preset.stage2D.providerId]?.brandKey, iconUrl: providersById[preset.stage2D.providerId]?.brandIconUrl },
   } as any : ({} as any);
   return (
-    <div className="mb-4 p-3 max-w-2xl mr-auto">
+    <div className="mb-4 w-full px-2 md:px-3 mr-auto">
       <div
         className="text-sm font-semibold mb-5"
         style={{ color: '#AEB3B9' }}

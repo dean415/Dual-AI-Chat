@@ -110,6 +110,7 @@ export interface RoleConfig {
   systemPrompt?: string;    // System instruction
   userPromptTemplate?: string; // User prompt template with {{variables}}
   parameters?: RoleParameters;  // Optional tunables
+  streamingEnabled?: boolean;   // Per-role streaming toggle (messages streaming in workflows)
 }
 
 // Team presets
@@ -158,6 +159,7 @@ export interface RoleLibraryItem {
   modelId: string;          // model identifier for the provider
   systemPrompt?: string;    // optional system instruction
   parameters?: RoleParameters; // optional toggled parameters
+  streamingEnabled?: boolean;  // Per-role streaming toggle for workflows
 }
 
 // Transcript message for future history-N (global memory)

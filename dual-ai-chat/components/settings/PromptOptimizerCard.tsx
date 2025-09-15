@@ -102,6 +102,9 @@ const PromptOptimizerCard: React.FC = () => {
           <div><code className="text-gray-700">{'{{recent_mixed_messages}}'}</code> 最近 N 条历史（用户与 notepad/canvas 混合，已加来源前缀）。</div>
           <div><code className="text-gray-700">{'{{current_input}}'}</code> 当前输入框待优化的整段文本。</div>
           <div className="mt-1">注意：{'{workflow_name}'} 将被实际工作流名称替换后再传给模型。</div>
+          <div className="mt-1 text-gray-600">
+            发送策略：当所选渠道为 OpenAI 兼容时，最近 N 条历史会被拆分为多条 <code className="text-gray-700">role:'user'</code> 消息（用户消息以 <code>User's Original Request:</code> 开头，notepad 以 <code>{'{workflow_name}'}'s response to user:</code> 开头）；模板中的 <code className="text-gray-700">{'{{current_input}}'}</code> 将作为最后一条 <code>role:'user'</code> 消息单独发送。非 OpenAI 渠道则继续以拼接文本注入 <code className="text-gray-700">{'{{recent_mixed_messages}}'}</code> 后发送。
+          </div>
         </div>
       </div>
     </div>

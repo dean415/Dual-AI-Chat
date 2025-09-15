@@ -1,8 +1,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const MIN_PANEL_PERCENT = 20;
-const MAX_PANEL_PERCENT = 80;
+const MIN_PANEL_PERCENT = 10;
+const MAX_PANEL_PERCENT = 90;
 
 export const useAppUI = (initialChatPanelPercent: number, panelsContainerRef: React.RefObject<HTMLDivElement>) => {
   const [isNotepadFullscreen, setIsNotepadFullscreen] = useState<boolean>(false);
@@ -62,10 +62,31 @@ export const useAppUI = (initialChatPanelPercent: number, panelsContainerRef: Re
     setChatPanelWidthPercent(newChatPanelWidthPercent);
   }, [panelsContainerRef]);
 
+  // Touch support for mobile/touchpads
+  const handleTouchMoveOnDocument = useCallback((e: TouchEvent) => {
+    if (!isResizingRef.current || !panelsContainerRef.current) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    const containerWidth = panelsContainerRef.current.offsetWidth;
+    if (containerWidth === 0) return;
+
+    const deltaX = touch.clientX - initialMouseXRef.current;
+    const deltaPercent = (deltaX / containerWidth) * 100;
+
+    let newChatPanelWidthPercent = initialChatPanelWidthPercentRef.current + deltaPercent;
+
+    newChatPanelWidthPercent = Math.max(MIN_PANEL_PERCENT, newChatPanelWidthPercent);
+    newChatPanelWidthPercent = Math.min(MAX_PANEL_PERCENT, newChatPanelWidthPercent);
+
+    setChatPanelWidthPercent(newChatPanelWidthPercent);
+  }, [panelsContainerRef]);
+
   const handleMouseUpOnDocument = useCallback(() => {
     isResizingRef.current = false;
     document.removeEventListener('mousemove', handleMouseMoveOnDocument);
     document.removeEventListener('mouseup', handleMouseUpOnDocument);
+    document.removeEventListener('touchmove', handleTouchMoveOnDocument);
+    document.removeEventListener('touchend', handleMouseUpOnDocument as any);
   }, [handleMouseMoveOnDocument]);
 
   const handleMouseDownOnResizer = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -76,6 +97,15 @@ export const useAppUI = (initialChatPanelPercent: number, panelsContainerRef: Re
     document.addEventListener('mousemove', handleMouseMoveOnDocument);
     document.addEventListener('mouseup', handleMouseUpOnDocument);
   }, [chatPanelWidthPercent, handleMouseMoveOnDocument, handleMouseUpOnDocument]);
+
+  const handleTouchStartOnResizer = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!e.touches || e.touches.length === 0) return;
+    isResizingRef.current = true;
+    initialMouseXRef.current = e.touches[0].clientX;
+    initialChatPanelWidthPercentRef.current = chatPanelWidthPercent;
+    document.addEventListener('touchmove', handleTouchMoveOnDocument, { passive: false });
+    document.addEventListener('touchend', handleMouseUpOnDocument as any);
+  }, [chatPanelWidthPercent, handleTouchMoveOnDocument, handleMouseUpOnDocument]);
 
   const handleResizerKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -102,8 +132,10 @@ export const useAppUI = (initialChatPanelPercent: number, panelsContainerRef: Re
     return () => {
       document.removeEventListener('mousemove', handleMouseMoveOnDocument);
       document.removeEventListener('mouseup', handleMouseUpOnDocument);
+      document.removeEventListener('touchmove', handleTouchMoveOnDocument);
+      document.removeEventListener('touchend', handleMouseUpOnDocument as any);
     };
-  }, [handleMouseMoveOnDocument, handleMouseUpOnDocument]);
+  }, [handleMouseMoveOnDocument, handleMouseUpOnDocument, handleTouchMoveOnDocument]);
 
 
   return {
@@ -115,6 +147,7 @@ export const useAppUI = (initialChatPanelPercent: number, panelsContainerRef: Re
     isSettingsModalOpen,
     toggleNotepadFullscreen,
     handleMouseDownOnResizer,
+    handleTouchStartOnResizer,
     handleResizerKeyDown,
     openSettingsModal,
     closeSettingsModal,

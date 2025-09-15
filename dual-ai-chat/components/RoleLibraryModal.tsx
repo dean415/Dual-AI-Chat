@@ -42,6 +42,7 @@ const RoleLibraryModal: React.FC<Props> = ({ isOpen, onClose, initialSelectedNam
     systemPrompt: r.systemPrompt,
     userPromptTemplate: undefined,
     parameters: r.parameters,
+    streamingEnabled: r.streamingEnabled,
   });
   const fromRoleConfig = (rc: RoleConfig): RoleLibraryItem => ({
     id: rc.roleId,
@@ -50,6 +51,7 @@ const RoleLibraryModal: React.FC<Props> = ({ isOpen, onClose, initialSelectedNam
     modelId: rc.modelId,
     systemPrompt: rc.systemPrompt,
     parameters: rc.parameters,
+    streamingEnabled: rc.streamingEnabled,
   });
 
   const saveRoles = (list: RoleLibraryItem[]) => {
@@ -60,7 +62,7 @@ const RoleLibraryModal: React.FC<Props> = ({ isOpen, onClose, initialSelectedNam
   const addRole = () => {
     const id = `role-${Date.now()}`;
     const pid = providers[0]?.id || '';
-    const newRole: RoleLibraryItem = { id, name: `Role ${roles.length + 1}`, providerId: pid, modelId: providers[0]?.defaultModel || '', systemPrompt: '', parameters: {} };
+    const newRole: RoleLibraryItem = { id, name: `Role ${roles.length + 1}`, providerId: pid, modelId: providers[0]?.defaultModel || '', systemPrompt: '', parameters: {}, streamingEnabled: true };
     const next = [...roles, newRole];
     saveRoles(next);
     setSelectedId(id);

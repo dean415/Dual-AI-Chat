@@ -26,7 +26,7 @@ interface Props {
 
 const WorkflowBubble: React.FC<Props> = ({ rounds, title, showDebug, showTypingCaret }) => {
   return (
-    <div className="mb-4 p-3 max-w-2xl mr-auto">
+    <div className="mb-4 w-full px-2 md:px-3 mr-auto">
       <div className="text-sm font-semibold mb-3" style={{ color: '#AEB3B9' }}>
         {title || 'Workflow'}
       </div>

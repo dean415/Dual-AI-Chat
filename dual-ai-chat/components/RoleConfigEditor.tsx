@@ -32,9 +32,32 @@ const RoleConfigEditor: React.FC<Props> = ({ title, role, providers, availableVa
             {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.providerType})</option>)}
           </select>
         </label>
-        <label className="text-sm col-span-2">模型 ID
-          <input className="mt-1 w-full p-1.5 bg-transparent border-0 outline-none focus:ring-0" value={role.modelId} onChange={e => onChange({ ...role, modelId: e.target.value })} placeholder="例如 gemini-2.5-pro / gpt-4o / llama3" />
-        </label>
+        {/* 4-column layout row: Model ID (left), Streaming (right under Provider), with compact Model ID width */}
+        <div className="col-span-2 grid grid-cols-4 gap-3 items-start">
+          <label className="text-sm col-span-1">模型 ID
+            <input
+              className="mt-1 w-full p-1.5 bg-transparent border-0 outline-none focus:ring-0"
+              value={role.modelId}
+              onChange={e => onChange({ ...role, modelId: e.target.value })}
+              placeholder="例如 gemini-2.5-pro / gpt-4o / llama3"
+            />
+          </label>
+          <div className="col-span-1"></div>
+          <div className="col-span-2 text-sm">
+            <div className="text-gray-600">Streaming</div>
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={() => onChange({ ...role, streamingEnabled: !(role.streamingEnabled !== false) })}
+                aria-label={(role.streamingEnabled !== false) ? 'Disable streaming for this role' : 'Enable streaming for this role'}
+                className={`w-10 h-6 rounded-full transition-colors ${(role.streamingEnabled !== false) ? 'bg-[#C46345]' : 'bg-gray-300'}`}
+                title="Enable per-role streaming (OpenAI chat streaming)"
+              >
+                <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform ${(role.streamingEnabled !== false) ? 'translate-x-4' : 'translate-x-1'}`}></span>
+              </button>
+            </div>
+          </div>
+        </div>
         <label className="text-sm col-span-2">系统提示词
           <textarea className="mt-1 w-full p-1.5 bg-transparent border-0 outline-none focus:ring-0 h-24" value={role.systemPrompt || ''} onChange={e => onChange({ ...role, systemPrompt: e.target.value })} />
         </label>

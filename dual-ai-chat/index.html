@@ -101,7 +101,7 @@
       color: #1f2937; /* match chat text-gray-800 */
       font-family: var(--font-latin), var(--font-cjk), sans-serif; /* match chat sans-serif */
       font-size: 28px; /* Canvas body size */
-      line-height: 1.6; /* comfortable at larger size */
+      line-height: 1.7; /* slightly taller for readability */
       background-color: #ffffff; /* bg-gray-50 */
       height: 100%;
       overflow-y: auto;
@@ -113,18 +113,18 @@
     .markdown-preview h5,
     .markdown-preview h6 {
       color: #1f2937; /* match chat heading color (black-ish) */
-      margin-top: 1em;
-      margin-bottom: 0.5em;
+      margin-top: 1.25em; /* clearer section separation */
+      margin-bottom: 0.7em; /* more space below heading */
       font-weight: var(--weight-heading);
     }
-    .markdown-preview h1 { font-size: 40px; }
-    .markdown-preview h2 { font-size: 32px; }
+    .markdown-preview h1 { font-size: 40px; font-weight: 700; }
+    .markdown-preview h2 { font-size: 32px; /* h2..h6 keep semi-bold via var */ }
     .markdown-preview h3 { font-size: 28px; }
-    .markdown-preview p { margin-bottom: 0.75em; color: #1f2937; }
+    .markdown-preview p { margin-bottom: 0.9em; color: #1f2937; }
     .markdown-preview ul,
     .markdown-preview ol {
       margin-left: 1.5em;
-      margin-bottom: 0.75em;
+      margin-bottom: 0.85em;
       list-style-position: outside;
       color: #1f2937;
     }
@@ -170,9 +170,11 @@
       margin: 1em 0;
     }
 
-    /* Light theme styles for Markdown content within chat bubbles */
+    /* Light theme styles for Markdown content within chat bubbles
+       Align visual parsing to Canvas (Notepad) while keeping chat fonts */
     .chat-markdown-content {
-      line-height: 1.625;
+      line-height: 1.7; /* match Canvas rhythm */
+      color: #1f2937; /* Canvas body color */
     }
     .chat-markdown-content h1,
     .chat-markdown-content h2,
@@ -180,52 +182,51 @@
     .chat-markdown-content h4,
     .chat-markdown-content h5,
     .chat-markdown-content h6 {
-      color: #0c4a6e; /* sky-800, darker for chat bubble headings */
-      margin-top: 0.75em;
-      margin-bottom: 0.4em;
+      color: #1f2937; /* Canvas heading color */
+      margin-top: 1.25em; /* Canvas spacing */
+      margin-bottom: 0.7em; /* Canvas spacing */
       font-weight: var(--weight-heading);
       line-height: var(--lh-heading);
     }
     .chat-markdown-content h1 { font-size: var(--fs-h2); }
     .chat-markdown-content h2 { font-size: var(--fs-h3); }
     .chat-markdown-content h3 { font-size: 1.05em; }
-    .chat-markdown-content p {
-      margin-bottom: 0.65em;
-    }
+    .chat-markdown-content p { margin-bottom: 0.9em; color: #1f2937; }
     .chat-markdown-content ul,
     .chat-markdown-content ol {
-      margin-left: 1.25em;
-      margin-bottom: 0.65em;
+      margin-left: 1.5em; /* Canvas indent */
+      margin-bottom: 0.85em;
       list-style-position: outside;
+      color: #1f2937;
     }
     .chat-markdown-content ul { list-style-type: disc; }
     .chat-markdown-content ol { list-style-type: decimal; }
-    .chat-markdown-content li { margin-bottom: 0.2em; }
+    .chat-markdown-content li { margin-bottom: 0.25em; }
     .chat-markdown-content blockquote {
-      border-left: 3px solid #9ca3af; /* border-gray-400 */
-      padding-left: 0.75em;
+      border-left: 4px solid #d1d5db; /* Canvas border */
+      padding-left: 1em;
       margin-left: 0;
-      margin-bottom: 0.65em;
-      color: #4b5563; /* text-gray-600 */
+      margin-bottom: 0.75em;
+      color: #6b7280; /* Canvas quote text */
       font-style: italic;
     }
     .chat-markdown-content pre {
-      background-color: #e5e7eb; /* gray-200, distinct from bubble */
-      padding: 0.65em;
-      border-radius: 0.25rem; /* rounded-sm */
+      background-color: #f3f4f6; /* Canvas code bg */
+      padding: 0.75em;
+      border-radius: 0.375rem; /* rounded-md */
       overflow-x: auto;
-      margin-bottom: 0.65em;
+      margin-bottom: 0.75em;
       color: #1f2937; /* text-gray-800 */
+      border: 1px solid #e5e7eb; /* border-gray-200 */
       font-family: var(--font-mono);
-      font-size: 0.875rem; /* text-sm relative to new body font-size. Will scale. */
-      border: 1px solid #d1d5db; /* border-gray-300 */
+      font-size: 0.875rem; /* keep chat size */
     }
     .chat-markdown-content code { /* Inline code */
-      background-color: #d1d5db; /* gray-300 */
-      color: #be185d; /* pink-700 */
-      padding: 0.15em 0.3em;
-      border-radius: 0.2rem;
-      font-size: 0.85em; 
+      background-color: #e5e7eb; /* Canvas inline code bg */
+      color: #c026d3; /* Canvas inline code fg */
+      padding: 0.2em 0.4em;
+      border-radius: 0.25rem;
+      font-size: 0.9em; /* relative to chat base */
       font-family: var(--font-mono);
     }
     .chat-markdown-content pre code { /* Code within pre blocks */
@@ -235,15 +236,13 @@
       color: inherit;
     }
     .chat-markdown-content a {
-      color: #0ea5e9; /* sky-500 */
+      color: #0369a1; /* Canvas link */
       text-decoration: underline;
     }
-    .chat-markdown-content a:hover {
-      color: #0284c7; /* sky-600 */
-    }
+    .chat-markdown-content a:hover { color: #0369a1; }
     .chat-markdown-content hr {
-      border-top: 1px solid #9ca3af; /* gray-400 */
-      margin: 0.75em 0;
+      border-top: 1px solid #d1d5db; /* Canvas rule */
+      margin: 1em 0;
     }
     /* Extra-slim scrollbar specifically for chat list */
     .chat-scrollbar::-webkit-scrollbar {
@@ -467,6 +466,81 @@
     html[data-theme='dark'] .moa-step-arrow svg { color: #B3B3B3; }
     /* Dark: MoE done badge (circle) -> orange */
     html[data-theme='dark'] .moa-done-badge circle { fill: #C46345 !important; }
+
+    /* Dark: Make the panel resizer visible and consistent with other separators */
+    html[data-theme='dark'] #panel-resizer { background-color: #3a3a3a !important; }
+    html[data-theme='dark'] #panel-resizer:hover { background-color: #4a4a4a !important; }
+
+    /* ===== Dark Mode: Notepad Canvas (Markdown preview) precise overrides ===== */
+    /* Body text in dark: softer gray to let headings stand out */
+    html[data-theme='dark'] .markdown-preview p,
+    html[data-theme='dark'] .markdown-preview ul,
+    html[data-theme='dark'] .markdown-preview ol,
+    html[data-theme='dark'] .markdown-preview li { color: #B0B0B0 !important; }
+
+    /* Headings in dark: H1 brightest, H2 slightly dimmer, others bright */
+    html[data-theme='dark'] .markdown-preview h1 { color: #F5F5F5 !important; }
+    html[data-theme='dark'] .markdown-preview h2 { color: #D4D4D4 !important; }
+    html[data-theme='dark'] .markdown-preview h3,
+    html[data-theme='dark'] .markdown-preview h4,
+    html[data-theme='dark'] .markdown-preview h5,
+    html[data-theme='dark'] .markdown-preview h6 { color: var(--dark-text) !important; }
+
+    /* Bold/strong emphasis in dark */
+    html[data-theme='dark'] .markdown-preview strong,
+    html[data-theme='dark'] .markdown-preview b { color: #D4D4D4 !important; }
+
+    /* Links: readable accent on dark */
+    html[data-theme='dark'] .markdown-preview a { color: #7DD3FC !important; }
+    html[data-theme='dark'] .markdown-preview a:hover { color: #BAE6FD !important; }
+
+    /* Blockquotes: softer text and stronger left border */
+    html[data-theme='dark'] .markdown-preview blockquote { color: var(--dark-text-muted) !important; border-left-color: #4B5563 !important; }
+
+    /* Inline code tokens */
+    html[data-theme='dark'] .markdown-preview code { background-color: #2E2E2E !important; color: #E9D5FF !important; }
+
+    /* Fenced code blocks */
+    html[data-theme='dark'] .markdown-preview pre { background-color: #1E1E1E !important; color: var(--dark-text) !important; border-color: #3A3A3A !important; }
+    html[data-theme='dark'] .markdown-preview pre code { color: inherit !important; background: transparent !important; }
+
+    /* Horizontal rules */
+    html[data-theme='dark'] .markdown-preview hr { border-top-color: #3A3A3A !important; }
+
+    /* Dark Mode: Chat bubbles (Markdown) to match Canvas palette */
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content p,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content ul,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content ol,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content li { color: #B0B0B0 !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h1 { color: #F5F5F5 !important; }
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h2 { color: #D4D4D4 !important; }
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h3,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h4,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h5,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content h6 { color: var(--dark-text) !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content strong,
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content b { color: #D4D4D4 !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content a { color: #7DD3FC !important; }
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content a:hover { color: #BAE6FD !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content blockquote { color: var(--dark-text-muted) !important; border-left-color: #4B5563 !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content code { background-color: #2E2E2E !important; color: #E9D5FF !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content pre { background-color: #1E1E1E !important; color: var(--dark-text) !important; border-color: #3A3A3A !important; }
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content pre code { color: inherit !important; background: transparent !important; }
+
+    html[data-theme='dark'] #chat-panel-wrapper .chat-markdown-content hr { border-top-color: #3A3A3A !important; }
+
+    /* Dark Mode: Notepad editing textarea (inside right panel) */
+    html[data-theme='dark'] #notepad-panel-wrapper textarea {
+      background-color: var(--dark-bg) !important;
+      color: var(--dark-text) !important;
+      border-color: #3a3a3a !important;
+    }
 
     /* Prompt Optimizer animated rainbow border (start -> active -> end) */
     .chat-input-area.optimizer-start textarea,

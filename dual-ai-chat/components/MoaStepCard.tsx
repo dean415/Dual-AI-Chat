@@ -96,8 +96,8 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
       try {
         const html = DOMPurify.sanitize(marked.parse(step.content || '') as string);
         body = (
-          <div className="serif-text" ref={streamWrapperRef} style={{ position: 'relative' }}>
-            <div className="prose prose-sm max-w-none inline-block align-baseline" dangerouslySetInnerHTML={{ __html: html }} />
+          <div ref={streamWrapperRef} style={{ position: 'relative' }}>
+            <div className="chat-markdown-content text-sm" dangerouslySetInnerHTML={{ __html: html }} />
             {/* Dedicated overlay layer for caret, skipped by measurement via aria-hidden */}
             <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
               {showTypingCaret && (
@@ -111,7 +111,7 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
         );
       } catch (e) {
         body = (
-          <div className="serif-text" ref={streamWrapperRef} style={{ position: 'relative' }}>
+          <div ref={streamWrapperRef} style={{ position: 'relative' }}>
             <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto inline-block align-baseline">{step.content}</pre>
             <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
               {showTypingCaret && (
@@ -126,7 +126,7 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
       }
     } else {
       body = (
-        <div className="text-[20px] text-gray-800 serif-text leading-none">
+        <div className="text-[20px] text-gray-800 leading-none">
           <ThinkingAnimated sizePx={20} />
         </div>
       );
@@ -136,7 +136,7 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
   } else {
     try {
       const html = DOMPurify.sanitize(marked.parse(step.content || '') as string);
-      body = <div className="prose prose-sm max-w-none serif-text" dangerouslySetInnerHTML={{ __html: html }} />;
+      body = <div className="chat-markdown-content text-sm" dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (e) {
       body = <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">{step.content}</pre>;
     }
@@ -159,8 +159,8 @@ const MoaStepCard: React.FC<Props> = ({ step, titleText, brand, iconUrl, showDeb
       >
         <div className="flex items-center gap-4 text-sm font-medium text-gray-700 leading-none">
           {icon}
-          <BrandIcon brand={brand} src={providerIconUrl} size={brandSize} />
-          <span className="ml-0.5 text-[20px] serif-text">{titleText || step.displayName}</span>
+          <BrandIcon brand={brand} src={providerIconUrl} size={brandSize} className="shrink-0" />
+          <span className="ml-0.5 text-[20px]">{titleText || step.displayName}</span>
         </div>
         <div className="flex items-center gap-3">
           {showDebug && singleLine && (

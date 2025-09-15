@@ -201,14 +201,14 @@ export function useWorkflowOrchestrator({
 
           // Non-first rounds: restate the original user request as a user message
           if (roundIndex > 0) {
-            messages.push({ role: 'user', content: `User's Original Request：---\n${userInput}` });
+            messages.push({ role: 'user', content: `User's Original Request：---\n${userInput}\n\n` });
           }
 
           // Include selected previous roles' outputs as individual user messages
           for (const fromName of receiveFrom) {
             const content = latestOutputOf(perRunOutputs, fromName, roundIndex);
             if (content && content.trim()) {
-              messages.push({ role: 'user', content: `${fromName}'s response to the User's Original Request:---\n"${content}"` });
+              messages.push({ role: 'user', content: `\n\n${fromName}'s response to the User's Original Request:---\n"${content}"\n\n` });
             }
           }
 
@@ -233,7 +233,8 @@ export function useWorkflowOrchestrator({
           } catch {}
 
           let res: { text: string; durationMs: number; errorCode?: ProviderErrorCode; errorMessage?: string };
-          if (provider.providerType === 'openai' && enableStreaming) {
+          const roleStream = (enableStreaming !== false) && (typeof (libRole as any)?.streamingEnabled === 'boolean' ? !!(libRole as any).streamingEnabled : true);
+          if (provider.providerType === 'openai' && roleStream) {
             let acc = '';
             const key = `${roundIndex}:${roleName}`;
             res = await new Promise(async (resolve) => {

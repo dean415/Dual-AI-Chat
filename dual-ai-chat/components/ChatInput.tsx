@@ -3,9 +3,11 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Plus, XCircle, StopCircle, Sparkles } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { getRoleLibrary } from '../utils/workflowStore';
-import { collectRecentMixedHistoryN } from '../utils/promptOptimizer';
-import { runRole } from '../services/roleRunner';
-import type { RoleConfig } from '../types';
+import { collectRecentMixedHistoryN, collectRecentMixedMessagesN, collectRecentWorkflowPairsN, collectRecentWorkflowPairsStrN } from '../utils/promptOptimizer';
+import { runRole, renderRoleUserPrompt } from '../services/roleRunner';
+import { callModelWithMessages } from '../services/providerAdapter';
+import type { OpenAiChatMessage } from '../services/openaiService';
+import type { RoleConfig, RoleParameters } from '../types';
 import { getOptimizerEnabled, getOptimizerN, getOptimizerRoleName, getOptimizerTemplate } from '../utils/promptOptimizerStore';
 import OptimizerRainbow from './OptimizerRainbow';
 
@@ -14,11 +16,12 @@ interface ChatInputProps {
   isLoading: boolean;
   isApiKeyMissing: boolean;
   onStopGenerating: () => void; // New prop
+  showWorkflowDebug?: boolean; // Debug mode toggle (from App)
 }
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKeyMissing, onStopGenerating }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKeyMissing, onStopGenerating, showWorkflowDebug }) => {
   const [inputValue, setInputValue] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -31,6 +34,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
   const [sparkPulse, setSparkPulse] = useState<boolean>(false);
   const [textFade, setTextFade] = useState<boolean>(false);
   const { state: appState } = useAppStore();
+  const [optimizerDebugOpen, setOptimizerDebugOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (selectedImage) {
@@ -139,6 +143,67 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
   const processing = optimizerStage === 'start' || optimizerStage === 'active';
   const wrapperClass = `relative chat-input-area`;
 
+  // Build debug preview identical to workflow debug mode logic, reflecting final messages actually sent
+  const optimizerDebug = React.useMemo(() => {
+    if (!showWorkflowDebug) return null;
+    try {
+      const enabled = getOptimizerEnabled();
+      if (!enabled) return null;
+      const roleName = getOptimizerRoleName();
+      const template = getOptimizerTemplate();
+      if (!roleName || !template || !template.trim()) return null;
+      const n = getOptimizerN();
+      const current = (typeof inputValue === 'string' ? inputValue : '') || '';
+      const lib = getRoleLibrary();
+      const libRole = lib.find(r => r.name === roleName);
+      if (!libRole) return null;
+      const provider = appState.apiProviders.find(p => p.id === libRole.providerId);
+      if (!provider) return null;
+      const tempRole: RoleConfig = {
+        roleId: 'prompt-optimizer-temp',
+        displayName: 'PromptOptimizer',
+        providerId: libRole.providerId,
+        modelId: libRole.modelId,
+        systemPrompt: libRole.systemPrompt,
+        userPromptTemplate: template,
+        parameters: libRole.parameters,
+      };
+
+      // Build the exact messages we will send
+      let messages: Array<{ role: 'user'; content: string }>;
+      if (provider.providerType === 'openai') {
+        // Prefer workflow-based Q→A pairs; fallback to mixed snapshots when no runs
+        let histMsgs = collectRecentWorkflowPairsN(n);
+        if (!histMsgs.length) {
+          histMsgs = collectRecentMixedMessagesN(n) as Array<{ role: 'user'; content: string }>;
+        }
+        const finalUser = renderRoleUserPrompt(tempRole, { recent_mixed_messages: '', current_input: current });
+        messages = [ ...histMsgs, { role: 'user', content: finalUser } ];
+      } else {
+        // Non-OpenAI path (single string) — prefer workflow pairs string
+        const recentStr = (collectRecentWorkflowPairsStrN(n) || collectRecentMixedHistoryN(n));
+        const single = renderRoleUserPrompt(tempRole, { recent_mixed_messages: recentStr, current_input: current });
+        messages = [ { role: 'user', content: single } ];
+      }
+
+      // Debug preview without length truncation (show full message content)
+      const preview = messages.map((m: any) => {
+        const raw = Array.isArray(m.content)
+          ? m.content.map((p: any) => (p?.type === 'text' ? p.text : '[img]')).join(' ')
+          : (m.content ?? '');
+        // Keep full text for better testing; normalize only to string
+        const full = typeof raw === 'string' ? raw : String(raw);
+        const item: any = { role: m.role, content: full };
+        return item;
+      });
+      const singleLine = JSON.stringify(preview);
+      const prettyBlock = `---\n${JSON.stringify(preview, null, 2)}\n---`;
+      return { preview, singleLine, prettyBlock };
+    } catch {
+      return null;
+    }
+  }, [showWorkflowDebug, inputValue, appState.apiProviders]);
+
   const handleOptimizeClick = useCallback(async () => {
     try {
       if (isOptimizing) return;
@@ -172,14 +237,36 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
       setSparkPulse(true);
       window.setTimeout(() => setSparkPulse(false), 280);
       window.setTimeout(() => setOptimizerStage('active'), 240);
-      const res = await runRole({
-        provider,
-        role: tempRole,
-        templateVars: {
-          recent_mixed_messages: recent,
-          current_input: current,
-        },
-      });
+      let res: { text: string; durationMs: number; errorCode?: any; errorMessage?: string };
+      if (provider.providerType === 'openai') {
+        // Build messages: prefer workflow Q→A pairs, fallback to mixed snapshots; then append current request
+        let histMsgs = collectRecentWorkflowPairsN(n);
+        if (!histMsgs.length) {
+          histMsgs = collectRecentMixedMessagesN(n) as Array<{ role: 'user'; content: string }>;
+        }
+        const finalUser = renderRoleUserPrompt(tempRole, { recent_mixed_messages: '', current_input: current });
+        const messages: OpenAiChatMessage[] = [
+          ...histMsgs,
+          { role: 'user', content: finalUser },
+        ];
+        res = await callModelWithMessages({
+          provider,
+          modelId: tempRole.modelId,
+          messages,
+          parameters: tempRole.parameters as RoleParameters | undefined,
+        });
+      } else {
+        // Non-OpenAI providers: single-string recent context — prefer workflow pairs string
+        const recent = (collectRecentWorkflowPairsStrN(n) || collectRecentMixedHistoryN(n));
+        res = await runRole({
+          provider,
+          role: tempRole,
+          templateVars: {
+            recent_mixed_messages: recent,
+            current_input: current,
+          },
+        });
+      }
       if (!res.errorCode) {
         const next = (res.text || '').toString();
         if (next && next.trim()) {
@@ -246,15 +333,31 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, isApiKe
         {/* Right-side add icon vertically centered regardless of textarea height */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[1.25rem] h-[1.6em] flex items-center z-10 pointer-events-auto">
           {/* Prompt Optimizer sparkles button to the left of plus */}
-          <button
-            type="button"
-            onClick={handleOptimizeClick}
-            className={`h-full w-[1.6em] mr-1 p-0 text-gray-600 hover:text-sky-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center leading-none ${sparkPulse ? 'sparkles-pulse' : ''}`}
-            disabled={isDisabledInput}
-            aria-label="Run Prompt Optimizer"
-          >
-            <Sparkles className="w-[1.05em] h-[1.05em]" />
-          </button>
+          <div className="relative"
+               onMouseEnter={() => { if (showWorkflowDebug) setOptimizerDebugOpen(true); }}
+               onMouseLeave={() => setOptimizerDebugOpen(false)}>
+            <button
+              type="button"
+              onClick={handleOptimizeClick}
+              className={`h-full w-[1.6em] mr-1 p-0 text-gray-600 hover:text-sky-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center leading-none ${sparkPulse ? 'sparkles-pulse' : ''}`}
+              disabled={isDisabledInput}
+              aria-label="Run Prompt Optimizer"
+            >
+              <Sparkles className="w-[1.05em] h-[1.05em]" />
+            </button>
+            {showWorkflowDebug && (
+              <>
+                <span className="absolute -top-1 -right-1 bg-black text-white text-[10px] leading-none px-[4px] py-[2px] rounded" title="Prompt Optimizer Debug">D</span>
+                {optimizerDebugOpen && optimizerDebug && (
+                  <div className="absolute bottom-[130%] right-0 bg-white border border-gray-300 rounded shadow-lg p-3 w-[1200px] max-w-[95vw] max-h-[85vh] overflow-auto z-50">
+                    <div className="text-[12px] text-gray-800 font-semibold mb-2">Prompt Optimizer messages (Debug)</div>
+                    <div className="text-[12px] text-gray-700 font-mono mb-2 whitespace-pre-wrap break-words">Debug: {optimizerDebug.singleLine}</div>
+                    <pre className="text-[12px] leading-5 text-gray-800 font-mono whitespace-pre-wrap break-words">{optimizerDebug.prettyBlock}</pre>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleFileButtonClick}

@@ -20,6 +20,7 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
     systemPrompt: initial.systemPrompt,
     userPromptTemplate: undefined,
     parameters: initial.parameters,
+    streamingEnabled: initial.streamingEnabled,
   } : {
     roleId: 'role-' + Date.now().toString(),
     displayName: 'New Role',
@@ -28,6 +29,7 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
     systemPrompt: '',
     userPromptTemplate: undefined,
     parameters: {},
+    streamingEnabled: true,
   });
 
   const toItem = (rc: RoleConfig): RoleLibraryItem => ({
@@ -37,6 +39,7 @@ const RoleEditorModal: React.FC<Props> = ({ isOpen, initial, providers, onCancel
     modelId: rc.modelId,
     systemPrompt: rc.systemPrompt,
     parameters: rc.parameters,
+    streamingEnabled: rc.streamingEnabled,
   });
 
   if (!isOpen) return null;

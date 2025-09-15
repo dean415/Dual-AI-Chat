@@ -156,6 +156,7 @@ interface ApiKeyStatus {
     isSettingsModalOpen,
     toggleNotepadFullscreen,
     handleMouseDownOnResizer,
+    handleTouchStartOnResizer,
     handleResizerKeyDown,
     openSettingsModal,
     closeSettingsModal,
@@ -650,7 +651,7 @@ interface ApiKeyStatus {
       } catch {}
     },
     
-    enableStreaming: streamingEnabled,
+    enableStreaming: true,
     streamIntervalMs: streamIntervalMs,
   });
 
@@ -728,6 +729,19 @@ interface ApiKeyStatus {
   const onSendMessageUnified = useCallback(async (message: string, imageFile?: File | null) => {
     // If custom workflow is active, run it and bypass legacy flows
     if (activeWorkflow && activeWorkflow.rounds && activeWorkflow.rounds.length > 0) {
+      // Before starting a new workflow run, archive current Notepad as a snapshot when it differs
+      // from the last stored snapshot. This ensures each round has a persistent version for
+      // Prompt Optimizer and survives chat switching.
+      try {
+        const active = getActiveChat();
+        const lastSnap = active && active.notepadSnapshots && active.notepadSnapshots.length
+          ? active.notepadSnapshots[active.notepadSnapshots.length - 1]
+          : null;
+        const currentCanvas = (notepadContent || '').toString();
+        if (currentCanvas.trim().length > 0 && (!lastSnap || lastSnap.content !== currentCanvas)) {
+          appendNotepadSnapshotToActiveChat(currentCanvas, Date.now());
+        }
+      } catch {}
       // Archive previous workflow bubble before starting a new run to preserve 1:1 chat layout
       setWorkflowRunHistory(prev => (currentWorkflowEvent ? [...prev, { id: currentWorkflowEvent.runId, rounds: currentWorkflowEvent.rounds, startedAt: currentWorkflowEvent.startedAt, anchorMessageId: currentWorkflowEvent.anchorMessageId, name: currentWorkflowEvent.name }] : prev));
       let userMsgId = '';
@@ -1022,6 +1036,7 @@ interface ApiKeyStatus {
                 isLoading={uiIsLoading}
                 isApiKeyMissing={apiKeyStatus.isMissing || apiKeyStatus.isInvalid || false}
                 onStopGenerating={handleStopGeneratingUnified}
+                showWorkflowDebug={showWorkflowDebug}
               />
 
             </div>
@@ -1031,16 +1046,17 @@ interface ApiKeyStatus {
         {!isNotepadFullscreen && (
           <div
             id="panel-resizer"
-            className="w-px h-full bg-gray-100 hover:bg-gray-200 rounded-full cursor-col-resize select-none shrink-0 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-0"
+            className="w-1 h-full bg-gray-100 hover:bg-gray-200 cursor-col-resize select-none shrink-0 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-0"
             onMouseDown={handleMouseDownOnResizer}
+            onTouchStart={handleTouchStartOnResizer}
             onKeyDown={handleResizerKeyDown}
             role="separator"
             aria-orientation="vertical"
             aria-label="Drag to resize chat and canvas"
             aria-controls="chat-panel-wrapper notepad-panel-wrapper"
             aria-valuenow={chatPanelWidthPercent}
-            aria-valuemin={20} 
-            aria-valuemax={80} 
+            aria-valuemin={10} 
+            aria-valuemax={90} 
             tabIndex={0}
             title="Drag to resize chat and notepad"
           />

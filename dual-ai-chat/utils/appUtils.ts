@@ -36,7 +36,20 @@ export interface ParsedAIResponse {
   discussionShouldEnd?: boolean;
 }
 
+// Minimal HTML entity decode to tolerate providers that escape tags
+const decodeHtmlEntities = (s: string): string => {
+  if (!s) return s;
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+};
+
 export const parseAIResponse = (responseText: string): ParsedAIResponse => {
+  // Normalize any HTML-escaped angle brackets so <np-...> tags are detectable
+  const normalizedText = decodeHtmlEntities(responseText);
   let remainingText = responseText;
   const modifications: NotepadAction[] = [];
   const parsingErrors: string[] = [];
@@ -74,7 +87,7 @@ export const parseAIResponse = (responseText: string): ParsedAIResponse => {
     }
 
     let match;
-    while ((match = regex.exec(responseText)) !== null) {
+    while ((match = regex.exec(normalizedText)) !== null) {
       const fullMatch = match[0];
       const startIndex = match.index;
       const endIndex = startIndex + fullMatch.length;
@@ -131,6 +144,37 @@ export const parseAIResponse = (responseText: string): ParsedAIResponse => {
     }
   }
 
+  // Fallback: tolerate a single unclosed content tag at the end, e.g., <np-replace-all>... (missing </np-replace-all>)
+  if (foundActions.length === 0) {
+    for (const tagDef of tagDefinitions) {
+      if (tagDef.type !== 'content') continue;
+      const openOnly = new RegExp(`<${tagDef.name}\\b[^>]*>([\\s\\S]*)$`, 'i');
+      const m = openOnly.exec(normalizedText);
+      if (m) {
+        const content = (m[1] || '').trim();
+        if (content) {
+          const startIndex = m.index;
+          const endIndex = startIndex + m[0].length;
+          foundActions.push({ action: { action: tagDef.action as any, content } as NotepadAction, startIndex, endIndex });
+          break;
+        }
+      }
+      // Also tolerate a self-closing tag carrying content via attribute: <np-replace-all content="..." />
+      const selfClosing = new RegExp(`<${tagDef.name}\\b([^>]*?)\\s*/>`, 'i');
+      const mc = selfClosing.exec(normalizedText);
+      if (mc) {
+        const attrs = parseAttributes(mc[1] || '');
+        const contentAttr = (attrs && typeof attrs['content'] === 'string') ? String(attrs['content']) : '';
+        if (contentAttr) {
+          const startIndex = mc.index;
+          const endIndex = startIndex + mc[0].length;
+          foundActions.push({ action: { action: tagDef.action as any, content: contentAttr } as NotepadAction, startIndex, endIndex });
+          break;
+        }
+      }
+    }
+  }
+
   // Sort actions by their start index to process them in order of appearance
   foundActions.sort((a, b) => a.startIndex - b.startIndex);
 
@@ -139,14 +183,14 @@ export const parseAIResponse = (responseText: string): ParsedAIResponse => {
   let lastIndex = 0;
   for (const found of foundActions) {
     if (found.startIndex > lastIndex) {
-      spokenTextParts.push(responseText.substring(lastIndex, found.startIndex));
+      spokenTextParts.push(normalizedText.substring(lastIndex, found.startIndex));
     }
     modifications.push(found.action);
     lastIndex = found.endIndex;
   }
   // Add any remaining text after the last tag
-  if (lastIndex < responseText.length) {
-    spokenTextParts.push(responseText.substring(lastIndex));
+  if (lastIndex < normalizedText.length) {
+    spokenTextParts.push(normalizedText.substring(lastIndex));
   }
   
   let spokenText = spokenTextParts.join('').trim();
